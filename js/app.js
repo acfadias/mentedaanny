@@ -70,7 +70,20 @@ function linkBtn(e, sm = true) {
 }
 function evHtml(e, idx = 0) {
   return `<li class="ti ev f-${e.fonte}" style="animation-delay:${idx * 45}ms"><time>${e.hora}</time><span class="evm" aria-hidden="true"></span>
-    <div class="body"><div class="t">${esc(e.titulo)}</div><div class="sub"><span class="pill src">${FONTE_NOME[e.fonte] || e.fonte}</span><span>até ${e.horaFim}${e.local && !/^https?:/.test(e.local) ? ' · ' + esc(e.local) : ''}</span>${linkBtn(e)}${e.doApp ? `<button class="x" data-act="del-comp" data-id="${e.appId}" title="Apagar compromisso">×</button>` : ''}</div></div></li>`;
+    <div class="body"><div class="t">${esc(e.titulo)}</div><div class="sub"><span class="pill src">${FONTE_NOME[e.fonte] || e.fonte}</span><span>até ${e.horaFim}${e.local && !/^https?:/.test(e.local) ? ' · ' + esc(e.local) : ''}</span>${linkBtn(e)}${e.doApp ? `<button class="x" data-act="del-comp" data-id="${e.appId}" title="Apagar compromisso">×</button>` : btnOcultar(e)}</div></div></li>`;
+}
+const EVS = new Map(); // eventos na tela, para o botão de ocultar
+function btnOcultar(e) { EVS.set(e.id, e); return `<button class="x ocultar" data-act="ocultar" data-id="${esc(e.id)}" title="Não mostrar no app" aria-label="Ocultar ${esc(e.titulo)}">×</button>`; }
+function dialogoOcultar(e) {
+  let dlg = document.getElementById('dlg-ocultar');
+  if (!dlg) { dlg = document.createElement('dialog'); dlg.id = 'dlg-ocultar'; document.body.appendChild(dlg); }
+  dlg.innerHTML = `<form method="dialog" class="form"><h2 class="serif" style="font-size:26px;margin:0">Ocultar do app?</h2>
+    <p class="note" style="margin:0"><b>${esc(e.titulo)}</b><br>Continua no Google Agenda. Só deixa de aparecer aqui e de contar na organização do seu dia.</p>
+    <div class="stack" style="gap:8px;margin-top:6px"><button class="btn" value="um">Ocultar só ${e.hora && e.ini ? 'neste dia' : 'este'}</button>
+    ${e.recorrente ? `<button class="btn ghost" value="todos">Ocultar todos os “${esc(e.titulo)}”</button>` : ''}
+    <button class="btn ghost" value="cancelar">Cancelar</button></div></form>`;
+  dlg.onclose = () => { if (dlg.returnValue === 'um' || dlg.returnValue === 'todos') { A.ocultar(e, dlg.returnValue === 'todos'); toast('Ocultado. Dá pra trazer de volta em Ajustes → Agendas.', 4000); } };
+  dlg.returnValue = ''; dlg.showModal();
 }
 function linhaDoTempo(dia) {
   const agora = new Date();
@@ -414,6 +427,8 @@ function cardAgendas() {
     ${linha('pessoal', 'Pessoal')}${linha('trabalho', 'Trabalho (Tutory)')}
     ${!push ? (pushTok ? instrPush : `<p class="note">A agenda da empresa não tem link secreto? <button class="btn ghost sm" data-act="gerar-push">Conectar pelo Apps Script</button></p>`) : ''}
     ${c.erros?.geral ? `<div class="banner" style="margin-top:12px">${esc(c.erros.geral)}</div>` : ''}
+    ${(() => { const oc = A.ocultos(); const itens = [...Object.entries(oc.serie).map(([k, v]) => ({ k, tipo: 'serie', t: v.titulo, sub: 'todos' })), ...Object.entries(oc.inst).map(([k, v]) => ({ k, tipo: 'inst', t: v.titulo, sub: v.ini ? new Date(v.ini).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }) : '' }))];
+      return itens.length ? `<details class="note" style="margin-top:10px"><summary>Eventos ocultos (${itens.length})</summary><ul class="list">${itens.map(i => `<li class="li"><span class="t">${esc(i.t)} <small class="muted">· ${esc(i.sub)}</small></span><button class="btn ghost sm" data-act="mostrar-ev" data-tipo="${i.tipo}" data-id="${esc(i.k)}">Mostrar de novo</button></li>`).join('')}</ul></details>` : ''; })()}
     <div class="row" style="margin-top:12px"><button class="btn ghost sm" data-act="atualizar-agenda">Atualizar agora</button></div>
     <p class="note">Os links ficam guardados só na sua conta. As agendas são lidas a cada 30 min e quando você abre o app.</p></section>`;
 }
@@ -464,7 +479,7 @@ function telaSemana() {
     const ok = tarefas.filter(i => i.feito).length;
     totH += dia.horasReuniao; totOk += ok; totT += tarefas.length;
     const linhas = [
-      ...dia.comHora.map(e => ({ h: minutos(e.hora), html: `<li class="wk-ev f-${e.fonte}"><time>${e.hora}</time><div><b>${esc(e.titulo)}</b>${e.link ? `<a class="wk-link" href="${esc(e.link)}" target="_blank" rel="noopener">Entrar ↗</a>` : ''}</div></li>` })),
+      ...dia.comHora.map(e => ({ h: minutos(e.hora), html: `<li class="wk-ev f-${e.fonte}"><time>${e.hora}</time><div><b>${esc(e.titulo)}</b>${e.link ? `<a class="wk-link" href="${esc(e.link)}" target="_blank" rel="noopener">Entrar ↗</a>` : ''}</div>${e.doApp ? '' : btnOcultar(e)}</li>` })),
       ...dia.itens.map(i => ({ h: minutos(i.hora), html: `<li class="wk-it f-${i.fonte || FONTE_DE_AREA[i.area] || 'pessoal'} ${i.feito ? 'feito' : ''}"><time>${i.hora}</time><label><input type="checkbox" class="chk" data-check="${i.data}|${i.id}" ${i.feito ? 'checked' : ''}><span>${esc(i.titulo)}${i.tag === 'remarcado' ? ' <i class="wk-tag">↪</i>' : ''}</span></label></li>` })),
     ].sort((a, b) => a.h - b.h).map(x => x.html).join('');
     return `<section class="wk-dia ${ehHoje ? 'hoje' : ''} ${passou ? 'passou' : ''} ${d.getDay() === 0 || d.getDay() === 6 ? 'fds' : ''}">
@@ -826,6 +841,8 @@ document.addEventListener('click', e => {
       else { if (!confirm(`Excluir "${c.nome}"?`)) break; F.salvar(d => { d.contas = d.contas.filter(y => y.id !== id); }); }
       toast('Conta removida.'); break;
     }
+    case 'ocultar': { const ev = EVS.get(id); if (ev) dialogoOcultar(ev); break; }
+    case 'mostrar-ev': A.mostrar(b.dataset.tipo, id); toast('Voltou a aparecer.'); break;
     case 'novo-comp': dialogoCompromisso(b.dataset.fonte, b.dataset.data); break;
     case 'semana': semanaOffset = b.dataset.v === '0' ? 0 : semanaOffset + Number(b.dataset.v); render(true); break;
     case 'del-comp': if (confirm('Apagar este compromisso?')) S.update('compromissos', [], l => l.filter(c => c.id !== id)); break;

@@ -35,7 +35,7 @@ export function lerIcs(ICAL, texto, fonte, ini, fim) {
     if ((ve.getFirstPropertyValue('status') || '').toUpperCase() === 'CANCELLED') return;
     if (item.component.getFirstPropertyValue('status')?.toUpperCase?.() === 'CANCELLED') return;
     const a = s.toJSDate(), b = (f || s).toJSDate();
-    out.push({ id: `${fonte}:${item.uid}:${a.getTime()}`, fonte, titulo: item.summary || '(sem título)', ini: a.getTime(), fim: b.getTime(), diaTodo: s.isDate, local: item.location || '', link: acharLink(item.component, item) });
+    out.push({ id: `${fonte}:${item.uid}:${a.getTime()}`, serie: `${fonte}:${item.uid}`, recorrente: ve.getFirstPropertyValue('rrule') != null, fonte, titulo: item.summary || '(sem título)', ini: a.getTime(), fim: b.getTime(), diaTodo: s.isDate, local: item.location || '', link: acharLink(item.component, item) });
   };
   for (const [ve, e] of mestres.values()) {
     if (e.isRecurring()) {
@@ -89,12 +89,20 @@ export function doApp(a) {
 
 // Eventos enviados pelo Apps Script (agendas de instituição sem link secreto)
 export const enviados = fonte => S.get('agenda:' + fonte, null);
-const enviadosTodos = () => ['trabalho', 'pessoal'].flatMap(f => (enviados(f)?.eventos || []).map(e => ({ ...e, fonte: f, id: `${f}:push:${e.id}:${e.ini}` })));
+const enviadosTodos = () => ['trabalho', 'pessoal'].flatMap(f => (enviados(f)?.eventos || []).map(e => { const base = String(e.id).split('_')[0]; return { ...e, fonte: f, id: `${f}:push:${e.id}:${e.ini}`, serie: `${f}:push:${base}`, recorrente: String(e.id).includes('_') }; }));
+
+// Eventos que ela escolheu não ver no app (continuam no Google Agenda)
+export const ocultos = () => ({ inst: {}, serie: {}, ...S.get('ocultos', {}) });
+export function ocultar(e, tudo) {
+  S.update('ocultos', {}, o => { o.inst ||= {}; o.serie ||= {}; if (tudo) o.serie[e.serie] = { titulo: e.titulo }; else o.inst[e.id] = { titulo: e.titulo, ini: e.ini }; });
+}
+export function mostrar(tipo, chave) { S.update('ocultos', {}, o => { if (o[tipo]) delete o[tipo][chave]; }); }
 
 // Eventos de um dia (com horário formatado)
 export function doDia(d) {
   const a = new Date(d); a.setHours(0, 0, 0, 0); const b = addDias(a, 1);
-  return [...cache().eventos.filter(e => !enviados(e.fonte)), ...enviadosTodos(), ...doApp(a)].sort((x, y) => x.ini - y.ini).filter(e => e.ini < b.getTime() && e.fim > a.getTime()).map(e => {
+  const oc = ocultos();
+  return [...cache().eventos.filter(e => !enviados(e.fonte)), ...enviadosTodos(), ...doApp(a)].filter(e => !oc.inst[e.id] && !(e.serie && oc.serie[e.serie])).sort((x, y) => x.ini - y.ini).filter(e => e.ini < b.getTime() && e.fim > a.getTime()).map(e => {
     const i = new Date(Math.max(e.ini, a.getTime())), f = new Date(Math.min(e.fim, b.getTime()));
     return { ...e, hora: e.diaTodo ? null : hm(i), horaFim: e.diaTodo ? null : (f.getTime() === b.getTime() ? '24:00' : hm(f)) };
   });

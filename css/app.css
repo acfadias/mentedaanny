@@ -517,3 +517,9 @@ dialog .row input{min-width:0;border:1px solid var(--line);background:var(--bg);
 .lg{display:inline-block;width:12px;height:12px;border-radius:4px;vertical-align:-1px;margin:0 4px 0 10px}
 .lg.pg{background:color-mix(in srgb,var(--ok) 45%,var(--bg))}
 .lg.aberto{background:color-mix(in srgb,var(--accent) 45%,var(--bg))}
+
+.x.ocultar{opacity:0;transition:opacity .2s}
+.ti.ev:hover .x.ocultar,.wk-ev:hover .x.ocultar,.x.ocultar:focus-visible{opacity:.7}
+@media (hover:none){.x.ocultar{opacity:.5}}
+.wk-ev{position:relative}
+.wk-ev .x.ocultar{position:absolute;top:2px;right:2px;font-size:14px;padding:2px 5px}
