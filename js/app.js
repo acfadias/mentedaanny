@@ -8,7 +8,7 @@ import * as A from './agenda.js';
 import * as F from './financas.js';
 import { montarDia, planoTcc, remarcarTcc, segunda, TCC_BLOCOS, janelaParaAdiantar, adiantarTcc, pendenciasSemana } from './dia.js';
 
-const VERSAO = '24'; // a mesma versão vai em version.json; o app se atualiza sozinho quando ela muda
+const VERSAO = '25'; // a mesma versão vai em version.json; o app se atualiza sozinho quando ela muda
 const $ = (s, el = document) => el.querySelector(s);
 const app = $('#app');
 const ICO_CORACAO = on => `<svg viewBox="0 0 24 24" width="16" height="16" fill="${on ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10z"/></svg>`;
@@ -190,7 +190,7 @@ function telaHoje() {
       <div class="c-5">${cardFrase(fraseExtra, anel(p, 112))}</div>
     </div>
     ${atalhos(dia)}
-    ${(() => { const c = A.cache(), l = S.get('agendas', {}); const erro = c.erros?.geral || Object.values(c.erros || {})[0]; return (l.pessoal || l.trabalho) && erro ? `<a class="banner" href="#ajustes" style="text-decoration:none;margin-top:0">Suas agendas não estão aparecendo: ${esc(erro)} <b>Ver em Ajustes →</b></a>` : ''; })()}
+    ${(() => { const c = A.cache(), l = S.get('agendas', {}); const erro = c.erros?.geral || Object.entries(c.erros || {}).filter(([k]) => !A.enviados(k)).map(([, v]) => v)[0]; return (l.pessoal || l.trabalho) && erro ? `<a class="banner" href="#ajustes" style="text-decoration:none;margin-top:0">Suas agendas não estão aparecendo: ${esc(erro)} <b>Ver em Ajustes →</b></a>` : ''; })()}
     <div class="grid">
       <div class="c-7 stack">${cardAgenda(dia)}${cardProximo(itens, p)}${cardConvergencia(dia)}<section class="card"><h2>Seu dia <span class="row">${legenda()}<small>${dia.contaveis.filter(i => i.feito).length} de ${dia.contaveis.length} tarefas</small><button class="btn ghost sm" data-act="novo-comp">+ Compromisso</button></span></h2>${linhaDoTempo(dia)}</section></div>
       <div class="c-5 stack">${cardTop3(data)}${cardPendencias()}${cardCaixa()}</div>

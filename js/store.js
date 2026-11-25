@@ -67,7 +67,10 @@ export function mesclar(a = {}, b = {}) {
   if (Object.keys(x).length) out._x = x;
   return out;
 }
-const igual = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+// Compara pelo conteúdo, sem depender da ordem das chaves (evita reenvio sem fim entre aparelhos)
+const canon = v => v && typeof v === 'object' && !Array.isArray(v) ? '{' + Object.keys(v).sort().map(k => JSON.stringify(k) + ':' + canon(v[k])).join(',') + '}' : JSON.stringify(v);
+const igual = (a, b) => canon(a) === canon(b);
+const reenviado = {};
 // Aplica um valor vindo da nuvem; devolve true se mudou algo aqui
 function receber(chave, valor, t) {
   const loc = rec(chave);
@@ -76,7 +79,8 @@ function receber(chave, valor, t) {
     if (igual(m, loc.v) && loc.t >= t) return false;
     const novo = { v: m, t: Math.max(loc.t, t) };
     mem.set(chave, novo); lsSet('d:' + chave, JSON.stringify(novo));
-    if (!igual(m, valor)) { novo.t = Date.now(); lsSet('d:' + chave, JSON.stringify(novo)); marcarPendente(chave); agendarEnvio(); }
+    // Só reenvia se a junção trouxe algo que a nuvem não tinha (e no máximo 1x a cada 10 s por chave)
+    if (!igual(m, valor) && Date.now() - (reenviado[chave] || 0) > 10000) { reenviado[chave] = Date.now(); novo.t = Date.now(); lsSet('d:' + chave, JSON.stringify(novo)); marcarPendente(chave); agendarEnvio(); }
     return true;
   }
   if (loc && t <= loc.t) return false;

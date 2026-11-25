@@ -55,7 +55,9 @@ export async function atualizar() {
   if (carregando) return carregando;
   carregando = (async () => {
     const links = S.get('agendas', {});
-    if (!links.pessoal && !links.trabalho) return cache();
+    // Agendas que já chegam pelo Apps Script não são lidas pelo link iCal (evita o limite do Google)
+    const pelaFuncao = ['pessoal', 'trabalho'].filter(f => links[f] && !enviados(f));
+    if (!pelaFuncao.length) { const c = cache(); if (c.erros && Object.keys(c.erros).length) { c.erros = {}; S.local(CACHE, JSON.stringify(c)); } return c; }
     const res = await S.funcao('agenda');
     let ICAL;
     try { ICAL = (await import('https://cdn.jsdelivr.net/npm/ical.js@2.2.1/+esm')).default; }
@@ -64,6 +66,7 @@ export async function atualizar() {
     const ini = addDias(hoje, -8), fim = addDias(hoje, 22);
     const eventos = [], erros = {}, contagem = {};
     for (const f of Object.keys(FONTES)) {
+      if (!pelaFuncao.includes(f)) continue;
       const r = res[f]; if (!r) continue;
       if (r.erro) { erros[f] = r.erro; continue; }
       if (!/BEGIN:VCALENDAR/.test(r.ics || '')) { erros[f] = 'O link não devolveu uma agenda. Use o “Endereço secreto no formato iCal”.'; continue; }
