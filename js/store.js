@@ -122,11 +122,29 @@ export async function iniciarNuvem() {
     sb = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, { auth: { persistSession: true, autoRefreshToken: true } });
     const { data } = await sb.auth.getSession();
     usuario = data.session?.user || null;
-    sb.auth.onAuthStateChange((_e, s) => { const antes = usuario?.id; usuario = s?.user || null; if (usuario && usuario.id !== antes) primeiraSync(); status(usuario ? 'on' : 'deslogado'); });
-    if (usuario) await primeiraSync(); else status('deslogado');
+    sb.auth.onAuthStateChange((_e, s) => { const antes = usuario?.id; usuario = s?.user || null; if (usuario && usuario.id !== antes) { primeiraSync(); ligarTempoReal(); } status(usuario ? 'on' : 'deslogado'); });
+    if (usuario) { await primeiraSync(); ligarTempoReal(); } else status('deslogado');
     addEventListener('online', () => puxar());
     document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') puxar(); });
   } catch (e) { console.warn('Supabase indisponível', e); status('erro'); }
+}
+
+// ---------- Tempo real: mudanças feitas em outro aparelho chegam na hora ----------
+let canal = null;
+export let tempoReal = 'desligado';
+function ligarTempoReal() {
+  if (!sb || !usuario) return;
+  if (canal) sb.removeChannel(canal);
+  canal = sb.channel('dados-' + usuario.id)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'dados', filter: `user_id=eq.${usuario.id}` }, ({ new: row }) => {
+      if (!row?.chave) return;
+      const loc = rec(row.chave);
+      if (loc && loc.t >= Number(row.atualizado)) return; // a mudança é deste aparelho ou mais antiga
+      const r = { v: row.valor, t: Number(row.atualizado) };
+      mem.set(row.chave, r); lsSet('d:' + row.chave, JSON.stringify(r));
+      avisar([row.chave]);
+    })
+    .subscribe(st => { tempoReal = st === 'SUBSCRIBED' ? 'ligado' : st === 'CHANNEL_ERROR' || st === 'TIMED_OUT' ? 'indisponível' : tempoReal; status(estado); });
 }
 
 async function primeiraSync() {

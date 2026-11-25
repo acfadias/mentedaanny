@@ -26,3 +26,6 @@ create policy "ler os meus dados"     on public.dados for select to authenticate
 create policy "criar os meus dados"   on public.dados for insert to authenticated with check (user_id = auth.uid());
 create policy "alterar os meus dados" on public.dados for update to authenticated using (user_id = auth.uid()) with check (user_id = auth.uid());
 create policy "apagar os meus dados"  on public.dados for delete to authenticated using (user_id = auth.uid());
+
+-- Tempo real: mudanças feitas num aparelho chegam na hora nos outros
+alter publication supabase_realtime add table public.dados;

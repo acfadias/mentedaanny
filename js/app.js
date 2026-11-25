@@ -8,7 +8,7 @@ import * as A from './agenda.js';
 import * as F from './financas.js';
 import { montarDia, planoTcc, remarcarTcc, segunda, TCC_BLOCOS, janelaParaAdiantar, adiantarTcc, pendenciasSemana } from './dia.js';
 
-const VERSAO = '17';
+const VERSAO = '18'; // a mesma versão vai em version.json; o app se atualiza sozinho quando ela muda
 const $ = (s, el = document) => el.querySelector(s);
 const app = $('#app');
 const ICO_CORACAO = on => `<svg viewBox="0 0 24 24" width="16" height="16" fill="${on ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10z"/></svg>`;
@@ -325,7 +325,7 @@ function telaAjustes() {
       ${cardAgendas()}
       ${cardFeed()}
       <section class="card c-12"><h2>Conta e sincronização</h2>${contaHtml}
-        <p class="note" style="margin:12px 0 0">Este aparelho: versão ${VERSAO} · ${S.conta() ? 'logado' : '<b>não logado</b>'} · agendas lidas ${A.cache().quando ? new Date(A.cache().quando).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : 'nunca'}${A.enviados('trabalho') ? ` · Tutory recebida ${new Date(A.enviados('trabalho').quando).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}` : ' · Tutory ainda não recebida aqui'}</p>
+        <p class="note" style="margin:12px 0 0">Este aparelho: versão ${VERSAO} · ${S.conta() ? `logado · tempo real ${S.tempoReal}` : '<b>não logado</b>'} · agendas lidas ${A.cache().quando ? new Date(A.cache().quando).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : 'nunca'}${A.enviados('trabalho') ? ` · Tutory recebida ${new Date(A.enviados('trabalho').quando).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}` : ' · Tutory ainda não recebida aqui'}</p>
         <div class="row" style="margin-top:10px"><button class="btn ghost sm" data-act="forcar-atualizar">Atualizar tudo agora</button></div></section>
     </div></div>`;
 }
@@ -1071,7 +1071,25 @@ async function recarregarAgenda(manual = false) {
   if (!digitando) render();
 }
 setInterval(recarregarAgenda, 15 * 60000);
-setInterval(() => { if (document.visibilityState === 'visible') S.puxar(); }, 5 * 60000);
+setInterval(() => { if (document.visibilityState === 'visible') S.puxar(); }, 60000);
+
+// ---------- Atualização automática do app (tela de início do iPhone/iPad também) ----------
+async function conferirVersao() {
+  try {
+    const r = await fetch('version.json?t=' + Date.now(), { cache: 'no-store' });
+    const { v } = await r.json();
+    if (!v || v === VERSAO) return;
+    const chave = 'mda:recarregou:' + v;
+    if (sessionStorage.getItem(chave)) return; // evita recarregar em loop
+    sessionStorage.setItem(chave, '1');
+    try { const regs = await navigator.serviceWorker?.getRegistrations?.() || []; await Promise.all(regs.map(x => x.update())); const ks = await caches?.keys?.() || []; await Promise.all(ks.map(k => caches.delete(k))); } catch {}
+    toast('Atualizando o app para a versão nova…', 2000);
+    setTimeout(() => location.reload(), 900);
+  } catch {}
+}
+conferirVersao();
+setInterval(conferirVersao, 10 * 60000);
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') conferirVersao(); });
 // Ao voltar para o app (iPad/celular), atualiza as agendas se a última leitura tiver mais de 5 min
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && Date.now() - (A.cache().quando || 0) > 5 * 60000) recarregarAgenda(); });
 

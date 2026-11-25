@@ -29,3 +29,7 @@ Site estático (GitHub Pages) + Supabase para sincronizar entre aparelhos com lo
 
 ## Privacidade
 O código é público, mas **nenhum dado pessoal fica no repositório**: checks, diário, compras e frases ficam no aparelho e, com login, no Supabase protegido por RLS (só a dona da conta lê e escreve).
+
+## Publicar uma versão nova
+Sempre que mudar o app, aumente o número em `version.json` e em `VERSAO` (início de `js/app.js`).
+Os aparelhos abertos, inclusive o app da tela de início do iPhone/iPad, se atualizam sozinhos.
