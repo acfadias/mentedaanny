@@ -151,7 +151,9 @@ export function montarDia(d = new Date(), agora = new Date()) {
   itens.sort((a, b) => minutos(a.hora) - minutos(b.hora));
   // Reuniões com horário também contam como tarefa (check em checks:data → "ev:<id>")
   const ch = S.get('checks:' + data, {});
-  const comHora = eventos.filter(e => !e.diaTodo).map(e => ({ ...e, data, ckId: 'ev:' + e.id, feito: !!ch['ev:' + e.id] }));
+  // Chave do check pelo título + horário: é a mesma em qualquer aparelho e venha a agenda do link iCal ou do script
+  const chave = e => { let h = 5381; for (const c of `${(e.titulo || '').trim().toLowerCase()}|${e.ini}`) h = ((h << 5) + h + c.charCodeAt(0)) | 0; return 'ev:' + (h >>> 0).toString(36); };
+  const comHora = eventos.filter(e => !e.diaTodo).map(e => { const k = chave(e); return { ...e, data, ckId: k, feito: !!(ch[k] || ch['ev:' + e.id]) }; });
   const contaveis = [...itens, ...comHora.map(e => ({ id: e.ckId, feito: e.feito }))];
   return { data, itens, eventos, diaTodo: eventos.filter(e => e.diaTodo), comHora, contaveis, mudancas, horasReuniao: A.horasReuniao(d) };
 }

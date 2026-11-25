@@ -127,7 +127,8 @@ export async function puxar() {
   if (!sb || !usuario) return;
   status('busy');
   const desde = Number(lsGet('_puxado') || 0);
-  const { data, error } = await sb.from('dados').select('chave,valor,atualizado').gt('atualizado', desde);
+  // margem de 15 min: tolera relógios diferentes entre aparelhos e envios atrasados
+  const { data, error } = await sb.from('dados').select('chave,valor,atualizado').gt('atualizado', Math.max(0, desde - 15 * 60000));
   if (error) { console.warn('pull', error); ultimoErro = 'Leitura: ' + (error.message || error.code); status('erro'); return; }
   const mudou = [];
   let max = desde;
