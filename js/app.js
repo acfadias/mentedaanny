@@ -54,6 +54,11 @@ function anel(p, tam = 118) {
     <div class="txt"><div><b>${p.ok}/${p.total}</b><span>feitos</span></div></div></div>`;
 }
 
+const FONTE_DE_AREA = { fe: 'pessoal', casa: 'pessoal', saude: 'pessoal', estudo: 'faculdade' };
+const ORDEM_FONTES = ['pessoal', 'trabalho', 'faculdade'];
+const proxFonte = f => ORDEM_FONTES[(ORDEM_FONTES.indexOf(f || 'pessoal') + 1) % ORDEM_FONTES.length];
+const fonteBtn = (f, act, i) => `<button class="fdot f-${f || 'pessoal'}" data-act="${act}" data-i="${i}" title="${FONTE_NOME[f || 'pessoal']} — toque para trocar" aria-label="Agenda: ${FONTE_NOME[f || 'pessoal']}. Toque para trocar"></button>`;
+const legenda = () => `<span class="legenda">${ORDEM_FONTES.map(f => `<span class="f-${f}"><span class="dotc"></span>${FONTE_NOME[f]}</span>`).join('')}</span>`;
 const FONTE_NOME = { trabalho: 'Trabalho', pessoal: 'Pessoal', faculdade: 'Faculdade' };
 function linkBtn(e, sm = true) {
   return e.link ? `<a class="btn rose ${sm ? 'sm' : ''} entrar" href="${esc(e.link)}" target="_blank" rel="noopener">Entrar ↗</a>` : '';
@@ -73,7 +78,7 @@ function linhaDoTempo(dia) {
   todos.forEach(({ k, h, v: it }, idx) => {
     if (!marcou && h > am) { html += `<li class="now-line" aria-hidden="true"><time>${String(agora.getHours()).padStart(2, '0')}:${String(agora.getMinutes()).padStart(2, '0')}</time><i></i><span></span></li>`; marcou = true; }
     if (k === 'e') { html += evHtml(it, idx); return; }
-    html += `<li class="ti ${it.feito ? 'feito' : ''} ${prox === it ? 'agora' : ''} a-${it.area}" style="animation-delay:${idx * 45}ms">
+    html += `<li class="ti ${it.feito ? 'feito' : ''} ${prox === it ? 'agora' : ''} a-${it.area} f-${it.fonte || FONTE_DE_AREA[it.area] || 'pessoal'}" style="animation-delay:${idx * 45}ms">
       <time>${it.hora}</time>
       <input type="checkbox" class="chk" data-check="${it.data}|${it.id}" ${it.feito ? 'checked' : ''} aria-label="${esc(it.titulo)}">
       <div class="body"><div class="t">${it.link ? `<a href="${it.link}" style="text-decoration:none">${esc(it.titulo)}</a>` : esc(it.titulo)}</div>
@@ -111,7 +116,7 @@ function cardProximo(itens, p) {
   const prox = pend.find(i => minutos(i.hora) + 30 >= am) || pend[pend.length - 1];
   if (!prox) return '';
   const dificil = new Date().getHours() >= 19 && p.pct < 0.4;
-  return `<section class="card next">
+  return `<section class="card next nf-${prox.fonte || FONTE_DE_AREA[prox.area] || 'pessoal'}">
     <input type="checkbox" class="chk" data-check="${prox.data}|${prox.id}" aria-label="Marcar ${esc(prox.titulo)}">
     <div style="min-width:0"><p class="eyebrow">Próximo passo · ${prox.hora}</p><div class="big">${esc(prox.titulo)}</div>
     ${dificil ? `<p style="margin:8px 0 0;opacity:.9;font-size:14px">${esc(sortear(DIA_DIFICIL))}</p>` : ''}</div></section>`;
@@ -120,7 +125,7 @@ function cardProximo(itens, p) {
 function cardTop3(data) {
   const top = S.get('top3:' + data, () => [{ t: '' }, { t: '' }, { t: '' }]);
   return `<section class="card"><h2>3 prioridades <small>só três. o resto espera.</small></h2><ul class="list">
-    ${top.map((p, i) => `<li class="li ${p.feito ? 'feito' : ''}"><span class="num3">${i + 1}</span>
+    ${top.map((p, i) => `<li class="li f-${p.fonte || 'pessoal'} ${p.feito ? 'feito' : ''}"><span class="num3">${i + 1}</span>${fonteBtn(p.fonte, 'fonte-top', i)}
       <input class="edit" data-top="${i}" data-k="top-${i}" value="${esc(p.t)}" placeholder="${['A coisa mais importante de hoje', 'Se der, isso', 'E isso, se sobrar energia'][i]}" enterkeyhint="done">
       <input type="checkbox" class="chk" data-topchk="${i}" ${p.feito ? 'checked' : ''} ${p.t ? '' : 'disabled'} aria-label="Concluir prioridade ${i + 1}"></li>`).join('')}
   </ul></section>`;
@@ -130,7 +135,7 @@ function cardCaixa() {
   const cx = S.get('caixa', []);
   return `<section class="card line"><h2>Caixa de entrada <small>jogue aqui, organize depois</small></h2>
     <form class="add" data-form="caixa"><input name="t" placeholder="Lembrei de uma coisa…" autocomplete="off" data-k="caixa-in" enterkeyhint="send"><button class="btn" aria-label="Adicionar">+</button></form>
-    <ul class="list">${cx.length ? cx.map(c => `<li class="li"><span class="t">${esc(c.t)}</span>
+    <ul class="list">${cx.length ? cx.map((c, i) => `<li class="li f-${c.fonte || 'pessoal'}">${fonteBtn(c.fonte, 'fonte-caixa', i)}<span class="t">${esc(c.t)}</span>
       <button class="btn ghost sm" data-act="promover" data-id="${c.id}" title="Virar prioridade de hoje">↑ hoje</button>
       <button class="x" data-act="del-caixa" data-id="${c.id}" aria-label="Apagar">×</button></li>`).join('') : '<li class="empty">Nada aqui. Cabeça leve. 🌿</li>'}</ul></section>`;
 }
@@ -148,7 +153,7 @@ function telaHoje() {
       <div class="c-5">${cardFrase(fraseExtra, anel(p, 112))}</div>
     </div>
     <div class="grid">
-      <div class="c-7 stack">${cardAgenda(dia)}${cardProximo(itens, p)}${cardConvergencia(dia)}<section class="card"><h2>Seu dia <span class="row"><small>${itens.filter(i => i.feito).length} de ${itens.length} tarefas</small><button class="btn ghost sm" data-act="novo-comp">+ Compromisso</button></span></h2>${linhaDoTempo(dia)}</section></div>
+      <div class="c-7 stack">${cardAgenda(dia)}${cardProximo(itens, p)}${cardConvergencia(dia)}<section class="card"><h2>Seu dia <span class="row">${legenda()}<small>${itens.filter(i => i.feito).length} de ${itens.length} tarefas</small><button class="btn ghost sm" data-act="novo-comp">+ Compromisso</button></span></h2>${linhaDoTempo(dia)}</section></div>
       <div class="c-5 stack">${cardTop3(data)}${cardCaixa()}</div>
     </div></div>`;
 }
@@ -169,7 +174,7 @@ function telaCasa() {
     <div class="hero"><div><p class="eyebrow">Gestão da casa</p><h1>Casa <em>em paz.</em></h1></div></div>
     ${bebe ? '<div class="banner">👶 Modo Bebê ligado: as tarefas da casa estão pausadas e não acumulam. Quem puder ajudar, ajuda. 🤍</div>' : ''}
     <div class="grid">
-      <section class="card c-12"><h2>Semana <small>seg a sex · fim de semana livre</small></h2><div class="semana">
+      <section class="card c-12"><h2>Semana <small>seg a sex · fim de semana livre</small></h2><div class="semana f-pessoal">
         ${dias.map(d => { const ds = ymd(d); const ch = S.get('checks:' + ds, {}); const ts = CASA.filter(t => t.dias.includes(d.getDay()));
           return `<div class="dia ${ds === hoje ? 'hoje' : ''}"><h3>${DIAS[d.getDay()]}</h3><div class="d">${d.getDate()} de ${MESES[d.getMonth()]}${ds === hoje ? ' · hoje' : ''}</div><div class="tasks">
           ${ts.map(t => `<label><input type="checkbox" class="chk" data-check="${ds}|${t.id}" ${ch[t.id] ? 'checked' : ''}><span>${t.icone} ${t.titulo}<br><small class="muted">${t.hora}</small></span></label>`).join('')}</div></div>`; }).join('')}
@@ -177,7 +182,7 @@ function telaCasa() {
       <section class="card c-7"><h2>Lista de compras <small>${compras.filter(c => !c.feito).length} itens</small></h2>
         <form class="add" data-form="compras"><input name="t" placeholder="Acabou o quê?" autocomplete="off" data-k="compras-in" enterkeyhint="send"><button class="btn">Adicionar</button></form>
         <div class="chips">${sugest.filter(s => !naLista.has(s.toLowerCase())).map(s => `<button class="chip" data-act="sugestao" data-t="${esc(s)}">+ ${esc(s)}</button>`).join('')}</div>
-        <ul class="list" style="margin-top:10px">${compras.length ? compras.map(c => `<li class="li ${c.feito ? 'feito' : ''}"><input type="checkbox" class="chk" data-compra="${c.id}" ${c.feito ? 'checked' : ''} aria-label="${esc(c.t)}"><span class="t">${esc(c.t)}</span><button class="x" data-act="del-compra" data-id="${c.id}" aria-label="Apagar">×</button></li>`).join('') : '<li class="empty">Lista vazia. Geladeira feliz.</li>'}</ul>
+        <ul class="list" style="margin-top:10px">${compras.length ? compras.map(c => `<li class="li f-pessoal ${c.feito ? 'feito' : ''}"><input type="checkbox" class="chk" data-compra="${c.id}" ${c.feito ? 'checked' : ''} aria-label="${esc(c.t)}"><span class="t">${esc(c.t)}</span><button class="x" data-act="del-compra" data-id="${c.id}" aria-label="Apagar">×</button></li>`).join('') : '<li class="empty">Lista vazia. Geladeira feliz.</li>'}</ul>
         ${compras.some(c => c.feito) ? '<div class="row" style="margin-top:12px"><button class="btn ghost sm" data-act="limpar-compras">Limpar comprados</button></div>' : ''}
       </section>
       <section class="card line c-5"><h2>Como funciona</h2><div class="note">
@@ -315,7 +320,7 @@ function telaFaculdade() {
     <div class="grid">
       <div class="c-7 stack">
         <section class="card"><h2>Blocos da semana <small>${feitos}h de ${TCC_BLOCOS}h</small></h2>
-          ${plano.length ? `<ul class="list">${plano.map(b => { const d = deYmd(b.data); const ok = !!S.get('checks:' + b.data, {})[b.id]; return `<li class="li ${ok ? 'feito' : ''}">
+          ${plano.length ? `<ul class="list">${plano.map(b => { const d = deYmd(b.data); const ok = !!S.get('checks:' + b.data, {})[b.id]; return `<li class="li f-faculdade ${ok ? 'feito' : ''}">
             <input type="checkbox" class="chk" data-check="${b.data}|${b.id}" ${ok ? 'checked' : ''} aria-label="Bloco de TCC">
             <span class="t"><b>${DIAS[d.getDay()]}</b>, ${b.hora}–${String(+b.hora.slice(0, 2) + 1).padStart(2, '0')}:00${b.remarcado ? `<br><small class="muted">${esc(b.remarcado)}</small>` : ''}</span>
             ${ok ? '' : `<button class="btn ghost sm" data-act="remarcar-tcc" data-id="${b.id}">Remarcar</button>`}</li>`; }).join('')}</ul>`
@@ -357,7 +362,7 @@ function telaTrabalho() {
           </div><p class="note" style="margin:10px 0 0">Dias com 5h ou mais de reunião ficam em rosé: neles eu tiro os blocos de TCC e deixo só o essencial.</p></section>
         <section class="card line"><h2>Tarefas do trabalho <small>${tarefas.filter(t => !t.feito).length}</small></h2>
           <form class="add" data-form="trabalho"><input name="t" placeholder="Ex.: follow-up com lead X" autocomplete="off" data-k="trab-in"><button class="btn">+</button></form>
-          <ul class="list">${tarefas.length ? tarefas.map(t => `<li class="li ${t.feito ? 'feito' : ''}"><input type="checkbox" class="chk" data-trab="${t.id}" ${t.feito ? 'checked' : ''}><span class="t">${esc(t.t)}</span>
+          <ul class="list">${tarefas.length ? tarefas.map(t => `<li class="li f-trabalho ${t.feito ? 'feito' : ''}"><input type="checkbox" class="chk" data-trab="${t.id}" ${t.feito ? 'checked' : ''}><span class="t">${esc(t.t)}</span>
             ${t.feito ? '' : `<button class="btn ghost sm" data-act="trab-hoje" data-id="${t.id}" title="Virar prioridade de hoje">↑ hoje</button>`}<button class="x" data-act="del-trab" data-id="${t.id}">×</button></li>`).join('') : '<li class="empty">Nada pendente.</li>'}</ul>
           ${tarefas.some(t => t.feito) ? '<button class="btn ghost sm" style="margin-top:10px" data-act="limpar-trab">Limpar feitas</button>' : ''}</section>
       </div>
@@ -510,7 +515,7 @@ document.addEventListener('click', e => {
     case 'promover': {
       const item = S.get('caixa', []).find(x => x.id === id); if (!item) break;
       let ok = false;
-      S.update('top3:' + hojeStr(), () => [{ t: '' }, { t: '' }, { t: '' }], top => { const i = top.findIndex(p => !p.t?.trim()); if (i >= 0) { top[i] = { t: item.t }; ok = true; } });
+      S.update('top3:' + hojeStr(), () => [{ t: '' }, { t: '' }, { t: '' }], top => { const i = top.findIndex(p => !p.t?.trim()); if (i >= 0) { top[i] = { t: item.t, fonte: item.fonte || 'pessoal' }; ok = true; } });
       if (ok) { S.update('caixa', [], l => l.filter(x => x.id !== id)); toast('Virou prioridade de hoje.'); } else toast('As 3 prioridades já estão cheias. Conclua uma antes. 🙂');
       break;
     }
@@ -533,6 +538,8 @@ document.addEventListener('click', e => {
     case 'del-frase': S.update('afirmacoes', { favs: [], minhas: [] }, af => { af.minhas = (af.minhas || []).filter(m => m.id !== id); }); break;
     case 'tema': aplicarTema(b.dataset.t); render(); break;
     case 'sair': S.sair().then(() => render()); break;
+    case 'fonte-top': S.update('top3:' + hojeStr(), () => [{ t: '' }, { t: '' }, { t: '' }], top => { const p = top[+b.dataset.i]; p.fonte = proxFonte(p.fonte); }); break;
+    case 'fonte-caixa': S.update('caixa', [], l => { const c = l[+b.dataset.i]; if (c) c.fonte = proxFonte(c.fonte); }); break;
     case 'novo-comp': dialogoCompromisso(b.dataset.fonte); break;
     case 'del-comp': if (confirm('Apagar este compromisso?')) S.update('compromissos', [], l => l.filter(c => c.id !== id)); break;
     case 'remarcar-tcc': { const r = remarcarTcc(id); toast(r ? `Bloco remarcado pra ${DIAS[deYmd(r.data).getDay()].toLowerCase()}, ${r.hora}.` : 'Não achei outro horário livre esta semana.'); break; }
@@ -540,7 +547,7 @@ document.addEventListener('click', e => {
     case 'limpar-trab': S.update('trabalho:tarefas', [], l => l.filter(x => !x.feito)); break;
     case 'trab-hoje': {
       const item = S.get('trabalho:tarefas', []).find(x => x.id === id); if (!item) break; let ok = false;
-      S.update('top3:' + hojeStr(), () => [{ t: '' }, { t: '' }, { t: '' }], top => { const i = top.findIndex(p => !p.t?.trim()); if (i >= 0) { top[i] = { t: item.t }; ok = true; } });
+      S.update('top3:' + hojeStr(), () => [{ t: '' }, { t: '' }, { t: '' }], top => { const i = top.findIndex(p => !p.t?.trim()); if (i >= 0) { top[i] = { t: item.t, fonte: 'trabalho' }; ok = true; } });
       toast(ok ? 'Virou prioridade de hoje.' : 'As 3 prioridades já estão cheias. 🙂'); break;
     }
     case 'del-agenda': S.update('agendas', {}, l => { delete l[b.dataset.k]; }); setTimeout(recarregarAgenda, 1500); break;
