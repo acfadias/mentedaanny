@@ -107,7 +107,7 @@ export async function puxar() {
 export async function iniciarNuvem() {
   if (!temNuvem()) { status('local'); return; }
   try {
-    const { createClient } = await import('https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/+esm');
+    const { createClient } = await import('https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/+esm');
     sb = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, { auth: { persistSession: true, autoRefreshToken: true } });
     const { data } = await sb.auth.getSession();
     usuario = data.session?.user || null;
