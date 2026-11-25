@@ -39,3 +39,25 @@ export const SUGESTOES = {
   bebe: ['Fraldas', 'Lenço umedecido'],
   pets: ['Ração'],
 };
+
+// Quantidade: entende "2 leite", "leite 2", "2x leite", "1kg arroz", "arroz 5 kg", "3 dz ovos"
+const UN = '(?:x|un|und|unid|kg|g|gr|l|lt|ml|pct|pcts|pacotes?|cx|caixas?|dz|d[uú]zias?|latas?|garrafas?|fardos?|rolos?|sacos?|bandejas?|potes?|ma[çc]os?)';
+const RX_INI = new RegExp(`^(\\d+(?:[.,]\\d+)?)\\s*(${UN})?\\.?\\s+(.+)$`, 'i');
+const RX_FIM = new RegExp(`^(.+?)\\s+(\\d+(?:[.,]\\d+)?)\\s*(${UN})?\\.?$`, 'i');
+export function separarQtd(txt) {
+  const s = String(txt).trim();
+  let m = s.match(RX_INI);
+  if (m) return { t: m[3].trim(), qtd: fmt(m[1], m[2]) };
+  m = s.match(RX_FIM);
+  if (m && !/^\d/.test(m[1])) return { t: m[1].trim(), qtd: fmt(m[2], m[3]) };
+  return { t: s, qtd: '' };
+}
+const fmt = (n, u) => { u = (u || '').toLowerCase(); return u === 'x' || !u ? n : `${n} ${u}`; };
+// Soma/subtrai 1 mantendo a unidade ("2 kg" -> "3 kg")
+export function passo(qtd, d) {
+  const m = String(qtd || '').match(/^(\d+(?:[.,]\d+)?)\s*(.*)$/);
+  const n = m ? Number(m[1].replace(',', '.')) : (qtd ? 1 : 0);
+  const novo = Math.max(0, n + d);
+  const un = m ? m[2] : '';
+  return novo ? `${String(novo).replace('.', ',')}${un ? ' ' + un : ''}` : '';
+}

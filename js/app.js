@@ -10,7 +10,7 @@ import * as E from './entregas.js';
 import * as C from './compras.js';
 import { montarDia, planoTcc, remarcarTcc, segunda, TCC_BLOCOS, janelaParaAdiantar, adiantarTcc, pendenciasSemana } from './dia.js';
 
-const VERSAO = '27'; // a mesma versão vai em version.json; o app se atualiza sozinho quando ela muda
+const VERSAO = '28'; // a mesma versão vai em version.json; o app se atualiza sozinho quando ela muda
 const $ = (s, el = document) => el.querySelector(s);
 const app = $('#app');
 const ICO_CORACAO = on => `<svg viewBox="0 0 24 24" width="16" height="16" fill="${on ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10z"/></svg>`;
@@ -233,9 +233,10 @@ function telaCasa() {
           ${ts.map(t => `<label><input type="checkbox" class="chk" data-check="${ds}|${t.id}" ${ch[t.id] ? 'checked' : ''}><span>${t.titulo}<br><small class="muted">${t.hora}</small></span></label>`).join('')}</div></div>`; }).join('')}
       </div></section>
       <section class="card c-7"><h2>Lista de compras <small>${compras.filter(c => !c.feito).length} itens</small></h2>
-        <form class="add" data-form="compras"><input name="t" placeholder="Acabou o quê?" autocomplete="off" data-k="compras-in" enterkeyhint="send"><button class="btn">Adicionar</button></form>
+        <form class="add" data-form="compras"><input name="t" placeholder="Acabou o quê? (ex.: 2 leite, arroz 5 kg)" autocomplete="off" data-k="compras-in" enterkeyhint="send"><button class="btn">Adicionar</button></form>
         <details class="sugestoes"><summary>Sugestões rápidas</summary>${Object.entries(C.SUGESTOES).map(([k, itens]) => { const f = itens.filter(x => !naLista.has(x.toLowerCase())); return f.length ? `<div class="sug-grupo"><span>${C.NOME[k]}</span><div class="chips" style="margin:0">${f.map(x => `<button class="chip" data-act="sugestao" data-t="${esc(x)}">+ ${esc(x)}</button>`).join('')}</div></div>` : ''; }).join('')}</details>
         ${compras.length ? C.agrupar(compras).map(([k, itens]) => `<div class="compra-grupo"><h3>${C.NOME[k]} <small>${itens.filter(c => !c.feito).length}</small></h3><ul class="list">${itens.map(c => `<li class="li f-pessoal ${c.feito ? 'feito' : ''}"><input type="checkbox" class="chk" data-compra="${c.id}" ${c.feito ? 'checked' : ''} aria-label="${esc(c.t)}"><span class="t">${esc(c.t)}</span>
+          <span class="qtd"><button class="qb" data-act="qtd" data-id="${c.id}" data-d="-1" aria-label="Menos">−</button><input class="qi" data-compra-qtd="${c.id}" value="${esc(c.qtd || '')}" placeholder="qtd" aria-label="Quantidade de ${esc(c.t)}"><button class="qb" data-act="qtd" data-id="${c.id}" data-d="1" aria-label="Mais">+</button></span>
           <select class="cat-sel" data-compra-cat="${c.id}" aria-label="Categoria de ${esc(c.t)}" title="Trocar categoria">${C.CATS.map(([ck, cn]) => `<option value="${ck}" ${ck === k ? 'selected' : ''}>${cn}</option>`).join('')}</select>
           <button class="x" data-act="del-compra" data-id="${c.id}" aria-label="Apagar">×</button></li>`).join('')}</ul></div>`).join('') : '<p class="empty">Lista vazia. Geladeira feliz.</p>'}
         ${compras.some(c => c.feito) ? '<div class="row" style="margin-top:12px"><button class="btn ghost sm" data-act="limpar-compras">Limpar comprados</button></div>' : ''}
@@ -360,7 +361,7 @@ function telaGeladeira() {
       ${cardProximo(itens, p)}
       <section class="card"><h2>Compras <small>${compras.length}</small></h2>
         <form class="add" data-form="compras"><input name="t" placeholder="Acabou o quê?" autocomplete="off" data-k="fr-compras"><button class="btn">+</button></form>
-        ${compras.length ? C.agrupar(compras).map(([k, itens]) => `<div class="compra-grupo"><h3>${C.NOME[k]}</h3><ul class="list">${itens.map(c => `<li class="li"><input type="checkbox" class="chk" data-compra="${c.id}"><span class="t">${esc(c.t)}</span></li>`).join('')}</ul></div>`).join('') : '<p class="empty">Nada faltando.</p>'}</section>
+        ${compras.length ? C.agrupar(compras).map(([k, itens]) => `<div class="compra-grupo"><h3>${C.NOME[k]}</h3><ul class="list">${itens.map(c => `<li class="li"><input type="checkbox" class="chk" data-compra="${c.id}"><span class="t">${esc(c.t)}</span>${c.qtd ? `<span class="pill">${esc(c.qtd)}</span>` : ''}</li>`).join('')}</ul></div>`).join('') : '<p class="empty">Nada faltando.</p>'}</section>
     </div>
     <section class="card"><h2>Hoje</h2>${linhaDoTempo(dia)}</section>
     <div class="fr-dim" id="fr-dim"></div>
@@ -825,6 +826,7 @@ app.addEventListener('change', e => {
   else if (t.dataset.pago) { F.marcarPago(t.dataset.pago, t.checked, finMes || F.mesDe()); if (t.checked) { confeteEm(t, 14); toast('Conta paga. Uma preocupação a menos.'); } }
   else if (t.dataset.fin) salvarFin(t);
   else if (t.dataset.trab) { S.update('trabalho:tarefas', [], l => { const c = l.find(x => x.id === t.dataset.trab); if (c) c.feito = t.checked; }); if (t.checked) { confeteEm(t, 14); toast(sortear(AO_MARCAR)); } }
+  else if (t.dataset.compraQtd) { S.update('compras', [], l => { const c = l.find(x => x.id === t.dataset.compraQtd); if (c) c.qtd = t.value.trim(); }); }
   else if (t.dataset.compraCat) { S.update('compras', [], l => { const c = l.find(x => x.id === t.dataset.compraCat); if (c) c.cat = t.value; }); toast('Categoria trocada.'); }
   else if (t.dataset.compra) { S.update('compras', [], l => { const c = l.find(x => x.id === t.dataset.compra); if (c) c.feito = t.checked; }); if (t.checked) { confeteEm(t, 12); toast('Comprado! ✓'); } }
   else if (t.dataset.act === 'bebe') { S.update('config', {}, c => { c.bebe = t.checked; }); toast(t.checked ? 'Modo Bebê ligado. Só o essencial agora.' : 'Modo Bebê desligado. Rotina completa de volta.'); }
@@ -876,7 +878,7 @@ app.addEventListener('submit', async e => {
     F.salvar(d => { if (!d.bancos.includes(banco)) d.bancos.push(banco); d.contas.push({ id: uid(), nome: f.nome.value.trim(), banco, pessoa: f.pessoa.value, dia: num(f.dia.value) || null, valor, desde: finMes }); });
     toast('Conta adicionada.'); return;
   }
-  if (tipo === 'compras' && v) { S.update('compras', [], l => { l.unshift({ id: uid(), t: v }); }); }
+  if (tipo === 'compras' && v) { let { t: nome, qtd } = C.separarQtd(v); nome = nome.charAt(0).toUpperCase() + nome.slice(1); S.update('compras', [], l => { const ja = l.find(x => !x.feito && x.t.toLowerCase() === nome.toLowerCase()); if (ja) { if (qtd) ja.qtd = qtd; toast(`${nome} já estava na lista${qtd ? ' — quantidade atualizada' : ''}.`); } else l.unshift({ id: uid(), t: nome, qtd }); }); }
   if (tipo === 'frase' && v) { S.update('afirmacoes', { favs: [], minhas: [] }, a => { a.minhas = a.minhas || []; a.minhas.unshift({ id: 'm-' + uid(), t: v }); }); toast('Frase salva.'); }
   if (tipo === 'login') {
     const modo = e.submitter?.value || 'entrar';
@@ -927,6 +929,7 @@ document.addEventListener('click', e => {
       break;
     }
     case 'pular': S.update('checks:' + b.dataset.d, {}, ch => { ch['pulou:' + id] = Date.now(); }); toast('Deixado pra lá. Sem culpa.'); break;
+    case 'qtd': S.update('compras', [], l => { const c = l.find(x => x.id === id); if (c) c.qtd = C.passo(c.qtd, Number(b.dataset.d)); }); break;
     case 'sugestao': S.update('compras', [], l => { l.unshift({ id: uid(), t: b.dataset.t }); }); break;
     case 'del-compra': S.update('compras', [], l => l.filter(x => x.id !== id)); break;
     case 'limpar-compras': S.update('compras', [], l => l.filter(x => !x.feito)); toast('Lista limpinha.'); break;

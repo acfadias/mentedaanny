@@ -645,3 +645,12 @@ dialog .row input{min-width:0;border:1px solid var(--line);background:var(--bg);
 /* seletor de categoria discreto: só um ícone, abre a lista ao tocar */
 .cat-sel{appearance:none;-webkit-appearance:none;width:30px;height:30px;padding:0;color:transparent;max-width:none;background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%238A6E5C' stroke-width='1.8' stroke-linecap='round'%3E%3Cpath d='M4 7h16M4 12h10M4 17h6'/%3E%3C/svg%3E") center/16px no-repeat;opacity:.6}
 .cat-sel option{color:#593A26;background:#FDF5E7}
+/* quantidade na lista de compras */
+.qtd{display:inline-flex;align-items:center;border:1px solid var(--line);border-radius:999px;background:var(--bg);flex:none}
+.qb{border:0;background:transparent;width:26px;height:28px;cursor:pointer;font-size:16px;line-height:1;color:var(--muted);border-radius:999px;transition:background-color .2s,color .2s}
+.qb:hover{color:var(--fg);background:var(--surface-2)}
+.qb:active{transform:scale(.85)}
+.qi{width:58px;border:0;background:transparent;text-align:center;font-size:14px;padding:4px 0;outline:none;font-variant-numeric:tabular-nums}
+.qi::placeholder{color:var(--muted);opacity:.6}
+.li.feito .qtd{opacity:.5}
+@media (max-width:480px){.qi{width:44px}.qb{width:22px}}
