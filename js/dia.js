@@ -149,7 +149,11 @@ export function montarDia(d = new Date(), agora = new Date()) {
     postos.push({ a: ini, b: ini + dur, e: { titulo: it.titulo.replace(/^[^\p{L}\d]+\s/u, '') } });
   }
   itens.sort((a, b) => minutos(a.hora) - minutos(b.hora));
-  return { data, itens, eventos, diaTodo: eventos.filter(e => e.diaTodo), comHora: eventos.filter(e => !e.diaTodo), mudancas, horasReuniao: A.horasReuniao(d) };
+  // Reuniões com horário também contam como tarefa (check em checks:data → "ev:<id>")
+  const ch = S.get('checks:' + data, {});
+  const comHora = eventos.filter(e => !e.diaTodo).map(e => ({ ...e, data, ckId: 'ev:' + e.id, feito: !!ch['ev:' + e.id] }));
+  const contaveis = [...itens, ...comHora.map(e => ({ id: e.ckId, feito: e.feito }))];
+  return { data, itens, eventos, diaTodo: eventos.filter(e => e.diaTodo), comHora, contaveis, mudancas, horasReuniao: A.horasReuniao(d) };
 }
 
 // ---------- Pendências da semana ----------

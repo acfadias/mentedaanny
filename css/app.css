@@ -523,3 +523,10 @@ dialog .row input{min-width:0;border:1px solid var(--line);background:var(--bg);
 @media (hover:none){.x.ocultar{opacity:.5}}
 .wk-ev{position:relative}
 .wk-ev .x.ocultar{position:absolute;top:2px;right:2px;font-size:14px;padding:2px 5px}
+
+.ti.ev.feito .t{text-decoration:line-through;text-decoration-color:var(--accent);opacity:.55}
+.ti.ev .chk{margin-top:1px}
+.wk-evck{display:flex;gap:6px;align-items:flex-start;cursor:pointer}
+.wk-evck .chk{width:15px;height:15px;border-width:1.4px;flex:none;margin-top:1px}
+.wk-evck .chk::after{width:4px;height:7px;margin-top:-2px;border-width:0 1.6px 1.6px 0}
+.wk-ev.feito b{text-decoration:line-through;opacity:.55}

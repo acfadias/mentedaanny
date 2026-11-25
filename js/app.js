@@ -69,7 +69,8 @@ function linkBtn(e, sm = true) {
   return e.link ? `<a class="btn rose ${sm ? 'sm' : ''} entrar" href="${esc(e.link)}" target="_blank" rel="noopener">Entrar ↗</a>` : '';
 }
 function evHtml(e, idx = 0) {
-  return `<li class="ti ev f-${e.fonte}" style="animation-delay:${idx * 45}ms"><time>${e.hora}</time><span class="evm" aria-hidden="true"></span>
+  const ck = e.ckId && e.data;
+  return `<li class="ti ev f-${e.fonte} ${e.feito ? 'feito' : ''}" style="animation-delay:${idx * 45}ms"><time>${e.hora}</time>${ck ? `<input type="checkbox" class="chk" data-check="${e.data}|${esc(e.ckId)}" ${e.feito ? 'checked' : ''} aria-label="${esc(e.titulo)}">` : '<span class="evm" aria-hidden="true"></span>'}
     <div class="body"><div class="t">${esc(e.titulo)}</div><div class="sub"><span class="pill src">${FONTE_NOME[e.fonte] || e.fonte}</span><span>até ${e.horaFim}${e.local && !/^https?:/.test(e.local) ? ' · ' + esc(e.local) : ''}</span>${linkBtn(e)}${e.doApp ? `<button class="x" data-act="del-comp" data-id="${e.appId}" title="Apagar compromisso">×</button>` : btnOcultar(e)}</div></div></li>`;
 }
 const EVS = new Map(); // eventos na tela, para o botão de ocultar
@@ -177,7 +178,7 @@ function telaHoje() {
   const d = new Date(), data = ymd(d);
   const dia = montarDia(d), itens = dia.itens;
   const top = S.get('top3:' + data, []);
-  const p = progresso(itens, top);
+  const p = progresso(dia.contaveis, top);
   const bebe = S.get('config', {}).bebe;
   return `<div class="view">
     <div class="grid hoje-top">
@@ -187,7 +188,7 @@ function telaHoje() {
     ${atalhos(dia)}
     ${(() => { const c = A.cache(), l = S.get('agendas', {}); const erro = c.erros?.geral || Object.values(c.erros || {})[0]; return (l.pessoal || l.trabalho) && erro ? `<a class="banner" href="#ajustes" style="text-decoration:none;margin-top:0">Suas agendas não estão aparecendo: ${esc(erro)} <b>Ver em Ajustes →</b></a>` : ''; })()}
     <div class="grid">
-      <div class="c-7 stack">${cardAgenda(dia)}${cardProximo(itens, p)}${cardConvergencia(dia)}<section class="card"><h2>Seu dia <span class="row">${legenda()}<small>${itens.filter(i => i.feito).length} de ${itens.length} tarefas</small><button class="btn ghost sm" data-act="novo-comp">+ Compromisso</button></span></h2>${linhaDoTempo(dia)}</section></div>
+      <div class="c-7 stack">${cardAgenda(dia)}${cardProximo(itens, p)}${cardConvergencia(dia)}<section class="card"><h2>Seu dia <span class="row">${legenda()}<small>${dia.contaveis.filter(i => i.feito).length} de ${dia.contaveis.length} tarefas</small><button class="btn ghost sm" data-act="novo-comp">+ Compromisso</button></span></h2>${linhaDoTempo(dia)}</section></div>
       <div class="c-5 stack">${cardTop3(data)}${cardPendencias()}${cardCaixa()}</div>
     </div></div>`;
 }
@@ -326,7 +327,7 @@ function telaAjustes() {
 function telaGeladeira() {
   const d = new Date(), data = ymd(d);
   const dia = montarDia(d), itens = dia.itens;
-  const p = progresso(itens, S.get('top3:' + data, []));
+  const p = progresso(dia.contaveis, S.get('top3:' + data, []));
   const compras = S.get('compras', []).filter(c => !c.feito);
   return `<div class="fr view">
     <a class="round fr-exit" href="#hoje" aria-label="Sair do Modo Geladeira">×</a>
@@ -475,11 +476,11 @@ function telaSemana() {
   const cols = dias.map(d => {
     const dia = montarDia(d);
     const ds = ymd(d), ehHoje = ds === ymd(hoje), passou = d < hoje;
-    const tarefas = dia.itens.filter(i => !i.opcional);
+    const tarefas = dia.contaveis.filter(i => !i.opcional);
     const ok = tarefas.filter(i => i.feito).length;
     totH += dia.horasReuniao; totOk += ok; totT += tarefas.length;
     const linhas = [
-      ...dia.comHora.map(e => ({ h: minutos(e.hora), html: `<li class="wk-ev f-${e.fonte}"><time>${e.hora}</time><div><b>${esc(e.titulo)}</b>${e.link ? `<a class="wk-link" href="${esc(e.link)}" target="_blank" rel="noopener">Entrar ↗</a>` : ''}</div>${e.doApp ? '' : btnOcultar(e)}</li>` })),
+      ...dia.comHora.map(e => ({ h: minutos(e.hora), html: `<li class="wk-ev f-${e.fonte} ${e.feito ? 'feito' : ''}"><time>${e.hora}</time><div><label class="wk-evck"><input type="checkbox" class="chk" data-check="${e.data}|${esc(e.ckId)}" ${e.feito ? 'checked' : ''} aria-label="${esc(e.titulo)}"><b>${esc(e.titulo)}</b></label>${e.link ? `<a class="wk-link" href="${esc(e.link)}" target="_blank" rel="noopener">Entrar ↗</a>` : ''}</div>${e.doApp ? '' : btnOcultar(e)}</li>` })),
       ...dia.itens.map(i => ({ h: minutos(i.hora), html: `<li class="wk-it f-${i.fonte || FONTE_DE_AREA[i.area] || 'pessoal'} ${i.feito ? 'feito' : ''}"><time>${i.hora}</time><label><input type="checkbox" class="chk" data-check="${i.data}|${i.id}" ${i.feito ? 'checked' : ''}><span>${esc(i.titulo)}${i.tag === 'remarcado' ? ' <i class="wk-tag">↪</i>' : ''}</span></label></li>` })),
     ].sort((a, b) => a.h - b.h).map(x => x.html).join('');
     return `<section class="wk-dia ${ehHoje ? 'hoje' : ''} ${passou ? 'passou' : ''} ${d.getDay() === 0 || d.getDay() === 6 ? 'fds' : ''}">
@@ -652,7 +653,7 @@ function navegar() {
 
 // ---------- Ações ----------
 function toggleCheck(data, id, marcado, el) {
-  const antes = progresso(montarDia().itens, S.get('top3:' + hojeStr(), []));
+  const antes = progresso(montarDia().contaveis, S.get('top3:' + hojeStr(), []));
   if (id.startsWith('conta:')) F.marcarPago(id.slice(6), marcado, data.slice(0, 7));
   else S.update('checks:' + data, {}, ch => { if (marcado) ch[id] = Date.now(); else delete ch[id]; });
   if (id === 'devocional') S.update('devo:' + data, null, v => marcado ? (v || (S.get('config', {}).bebe ? 'curto' : 'completo')) : null);
@@ -660,7 +661,7 @@ function toggleCheck(data, id, marcado, el) {
 }
 
 function celebrar(el, antes) {
-  const depois = progresso(montarDia().itens, S.get('top3:' + hojeStr(), []));
+  const depois = progresso(montarDia().contaveis, S.get('top3:' + hojeStr(), []));
   if (el) confeteEm(el, 22);
   if (depois.total && depois.ok === depois.total && antes.ok < antes.total) { setTimeout(festa, 250); toast(sortear(DIA_COMPLETO), 4200); }
   else toast(sortear(AO_MARCAR));
@@ -670,7 +671,7 @@ app.addEventListener('change', e => {
   const t = e.target;
   if (t.dataset.check) { const [d, id] = t.dataset.check.split('|'); toggleCheck(d, id, t.checked, t); }
   else if (t.dataset.topchk) {
-    const antes = progresso(montarDia().itens, S.get('top3:' + hojeStr(), []));
+    const antes = progresso(montarDia().contaveis, S.get('top3:' + hojeStr(), []));
     S.update('top3:' + hojeStr(), () => [{ t: '' }, { t: '' }, { t: '' }], top => { top[+t.dataset.topchk].feito = t.checked; });
     if (t.checked) celebrar(t, antes);
   }
@@ -775,7 +776,7 @@ document.addEventListener('click', e => {
     case 'devo-dia': devoSel = b.dataset.d; render(); $('.dbtn.sel')?.scrollIntoView({ inline: 'center', block: 'nearest', behavior: 'smooth' }); break;
     case 'devo-ok': {
       S.set('devo:' + devoSel, b.dataset.v);
-      const antes = progresso(montarDia().itens, S.get('top3:' + hojeStr(), []));
+      const antes = progresso(montarDia().contaveis, S.get('top3:' + hojeStr(), []));
       S.update('checks:' + devoSel, {}, ch => { ch.devocional = Date.now(); });
       if (devoSel === hojeStr()) celebrar(b, antes); else { confeteEm(b, 22); toast('Marcado.'); }
       break;
