@@ -279,7 +279,7 @@ function telaAjustes() {
   const u = S.conta();
   let contaHtml;
   if (!S.temNuvem()) contaHtml = `<div class="banner">Falta colar a chave do Supabase em <code>js/config.js</code>. Até lá, tudo fica salvo só neste aparelho.</div>`;
-  else if (u) contaHtml = `<div class="set"><div><b>Conectada</b><p>${esc(u.email)} · sincronizando entre aparelhos</p></div><button class="btn ghost sm" data-act="sair">Sair</button></div>`;
+  else if (u) contaHtml = `<div class="set"><div><b>Conectada</b><p>${esc(u.email)} · ${S.ultimoErro ? `<span style="color:var(--accent)">não está sincronizando: ${esc(S.ultimoErro)}</span>` : S.pendentesQtd() ? `${S.pendentesQtd()} alterações esperando envio` : 'tudo sincronizado'}</p></div><button class="btn ghost sm" data-act="sair">Sair</button></div>`;
   else contaHtml = `<form class="form" data-form="login"><input type="email" name="email" placeholder="E-mail" autocomplete="email" required><input type="password" name="senha" placeholder="Senha" autocomplete="current-password" required minlength="6">
     <div class="row"><button class="btn" name="modo" value="entrar">Entrar</button><button class="btn ghost" name="modo" value="criar">Criar minha conta</button></div>
     <p class="note">Crie a conta uma única vez. Depois, bloqueie novos cadastros no Supabase para ninguém mais conseguir entrar.</p></form>`;
@@ -404,7 +404,9 @@ function cardAgendas() {
       <li>Na linha <code>const CODIGO</code>, troque o texto pelo seu código: <input class="campo" readonly value="${esc(pushTok)}" onclick="this.select()" style="margin-top:6px"></li>
       <li>Na barra da esquerda, em <b>Serviços +</b>, adicione <b>Google Calendar API</b>.</li>
       <li>Salve, escolha a função <b>instalar</b> no topo e clique em <b>Executar</b>. Autorize quando o Google pedir.</li>
-      <li>Pronto: a cada 15 min as reuniões chegam aqui, com o link do Meet.</li></ol></details>` : '';
+      <li>Pronto: a cada 15 min as reuniões chegam aqui, com o link do Meet.</li></ol>
+      <div class="row" style="margin-top:8px"><button class="btn ghost sm" data-act="testar-push">Conferir se o código está salvo</button><button class="btn ghost sm" data-act="gerar-push">Gerar código novo</button></div>
+      <p class="note" id="push-diag"></p></details>` : '';
   const linha = (k, nome) => k === 'trabalho' && push ? linhaPush + instrPush : `<div class="set"><div><b><span class="dotc f-${k}"></span>${nome}</b><p>${l[k] ? (/\/public\//.test(l[k]) ? 'Atenção: este é o endereço <b>público</b>. Remova e cole o <b>endereço secreto</b> no formato iCal.' : c.erros?.[k] ? 'Atenção: ' + esc(c.erros[k]) : c.contagem?.[k] != null ? `Conectada ✓ · ${c.contagem[k]} eventos entre a semana passada e as próximas 3 semanas` : c.erros?.geral ? 'Ainda não consegui ler (veja o aviso abaixo).' : 'Salva. Toque em “Atualizar agora”.') : 'Cole o endereço secreto iCal desta agenda.'}</p></div>
     ${l[k] ? `<button class="btn ghost sm" data-act="del-agenda" data-k="${k}">Remover</button>` : `<form class="add" data-form="agenda" data-k="${k}" style="margin:0;flex:1;max-width:340px"><input name="t" type="password" placeholder="https://calendar.google.com/…/basic.ics" autocomplete="off"><button class="btn sm">Salvar</button></form>`}</div>`;
   return `<section class="card c-12"><h2>Agendas <small>${c.quando ? 'atualizado às ' + new Date(c.quando).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : ''}</small></h2>
@@ -785,6 +787,17 @@ document.addEventListener('click', e => {
         if (tipo === 'top') marcar(p => { p.pulou = true; }); else S.update('checks:' + data, {}, ch => { ch['pulou:' + id] = Date.now(); });
         toast(foi === 'caixa' ? 'Prioridades cheias: coloquei na caixa de entrada.' : 'Trouxe pra hoje como prioridade.');
       }
+      break;
+    }
+    case 'testar-push': {
+      const el = $('#push-diag'); if (el) el.textContent = 'Conferindo…';
+      S.naNuvem('push:' + S.get('push-token', '')).then(r => {
+        const msg = r.ok ? 'Código salvo na sua conta ✓. Agora rode enviarAgenda no Apps Script.'
+          : r.msg === 'sem login' ? 'Você não está logada neste aparelho. Entre na conta (abaixo) e confira de novo.'
+          : r.msg === 'não encontrado' ? 'O código ainda não chegou à sua conta. Toque em “Gerar código novo” e confira de novo.'
+          : 'O Supabase recusou: ' + r.msg + '. Me mande um print desta mensagem.';
+        const e2 = $('#push-diag'); if (e2) e2.textContent = msg; toast(msg, 6000);
+      });
       break;
     }
     case 'gerar-push': {

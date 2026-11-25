@@ -11,8 +11,11 @@ Deno.serve(async (req) => {
   if (req.method !== 'POST') return json({ ok: true });
   const cod = req.headers.get('x-codigo') ?? '';
   if (!/^[a-f0-9]{32,64}$/.test(cod)) return json({ erro: 'Código inválido' }, 404);
-  const { data: dono } = await sb.from('dados').select('user_id, valor').eq('chave', 'push:' + cod).maybeSingle();
-  if (!dono?.valor) return json({ erro: 'Código inválido' }, 404);
+  if (!chave) return json({ erro: 'A função não encontrou a chave de serviço do Supabase.' }, 500);
+  const { data: dono, error: e1 } = await sb.from('dados').select('user_id, valor').eq('chave', 'push:' + cod).maybeSingle();
+  if (e1) return json({ erro: 'Erro ao ler o banco: ' + e1.message }, 500);
+  if (!dono) return json({ erro: 'Código não encontrado na sua conta. No app (logada), confira o código em Ajustes → Agendas.' }, 404);
+  if (!dono.valor) return json({ erro: 'Este código foi substituído por um novo. Copie o código atual do app.' }, 404);
 
   let body: any = {};
   try { body = await req.json(); } catch { return json({ erro: 'Corpo inválido' }, 400); }

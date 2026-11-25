@@ -66,6 +66,16 @@ function status(s) { estado = s; statusFns.forEach(fn => fn(estado, usuario)); }
 
 export const temNuvem = () => !!(SUPABASE_URL && SUPABASE_ANON_KEY);
 export const conta = () => usuario;
+export let ultimoErro = '', ultimaSync = 0;
+export const pendentesQtd = () => pendentes().length;
+// Confere se uma chave já está salva na nuvem (diagnóstico)
+export async function naNuvem(chave) {
+  if (!sb || !usuario) return { ok: false, msg: 'sem login' };
+  await enviar();
+  const { data, error } = await sb.from('dados').select('chave').eq('chave', chave).maybeSingle();
+  if (error) return { ok: false, msg: error.message };
+  return { ok: !!data, msg: data ? 'salvo' : 'não encontrado' };
+}
 
 async function enviar() {
   if (!sb || !usuario) return;
@@ -74,9 +84,10 @@ async function enviar() {
   status('busy');
   const linhas = chaves.map(k => { const r = rec(k); return r && { user_id: usuario.id, chave: k, valor: r.v ?? null, atualizado: r.t }; }).filter(Boolean);
   const { error } = await sb.from('dados').upsert(linhas, { onConflict: 'user_id,chave' });
-  if (error) { console.warn('sync', error); status('erro'); return; }
+  if (error) { console.warn('sync', error); ultimoErro = 'Envio: ' + (error.message || error.code); status('erro'); return; }
   const restantes = pendentes().filter(k => !chaves.includes(k) || rec(k)?.t > (linhas.find(l => l.chave === k)?.atualizado || 0));
   lsSet('_pend', JSON.stringify(restantes));
+  ultimoErro = ''; ultimaSync = Date.now();
   status('on');
 }
 
@@ -85,7 +96,7 @@ export async function puxar() {
   status('busy');
   const desde = Number(lsGet('_puxado') || 0);
   const { data, error } = await sb.from('dados').select('chave,valor,atualizado').gt('atualizado', desde);
-  if (error) { console.warn('pull', error); status('erro'); return; }
+  if (error) { console.warn('pull', error); ultimoErro = 'Leitura: ' + (error.message || error.code); status('erro'); return; }
   const mudou = [];
   let max = desde;
   for (const row of data) {
