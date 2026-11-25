@@ -15,6 +15,7 @@ Site estático (GitHub Pages) + Supabase para sincronizar entre aparelhos com lo
 | Nome | Código | Verify JWT |
 |---|---|---|
 | `agenda` | [`supabase/functions/agenda/index.ts`](supabase/functions/agenda/index.ts) — lê as agendas do Google (links iCal) | desligado |
+| `agenda-push` | [`supabase/functions/agenda-push/index.ts`](supabase/functions/agenda-push/index.ts) — recebe a agenda da Tutory enviada pelo [Apps Script](apps-script/agenda-tutory.gs) | desligado |
 | `feed` | [`supabase/functions/feed/index.ts`](supabase/functions/feed/index.ts) — link de agenda com tudo que é criado no app | desligado |
 
 ## Onde mexer

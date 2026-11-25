@@ -87,10 +87,14 @@ export function doApp(a) {
       return { id: 'app:' + c.id + ':' + data, appId: c.id, fonte: c.fonte, titulo: c.titulo, ini: t(c.ini), fim: t(c.fim || c.ini), diaTodo: false, local: c.local || '', link: c.link || null, doApp: true }; });
 }
 
+// Eventos enviados pelo Apps Script (agendas de instituição sem link secreto)
+export const enviados = fonte => S.get('agenda:' + fonte, null);
+const enviadosTodos = () => ['trabalho', 'pessoal'].flatMap(f => (enviados(f)?.eventos || []).map(e => ({ ...e, fonte: f, id: `${f}:push:${e.id}:${e.ini}` })));
+
 // Eventos de um dia (com horário formatado)
 export function doDia(d) {
   const a = new Date(d); a.setHours(0, 0, 0, 0); const b = addDias(a, 1);
-  return [...cache().eventos, ...doApp(a)].sort((x, y) => x.ini - y.ini).filter(e => e.ini < b.getTime() && e.fim > a.getTime()).map(e => {
+  return [...cache().eventos.filter(e => !enviados(e.fonte)), ...enviadosTodos(), ...doApp(a)].sort((x, y) => x.ini - y.ini).filter(e => e.ini < b.getTime() && e.fim > a.getTime()).map(e => {
     const i = new Date(Math.max(e.ini, a.getTime())), f = new Date(Math.min(e.fim, b.getTime()));
     return { ...e, hora: e.diaTodo ? null : hm(i), horaFim: e.diaTodo ? null : (f.getTime() === b.getTime() ? '24:00' : hm(f)) };
   });

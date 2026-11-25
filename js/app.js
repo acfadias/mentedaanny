@@ -395,11 +395,22 @@ function telaTrabalho() {
 function cardAgendas() {
   const l = S.get('agendas', {});
   const c = A.cache();
-  const linha = (k, nome) => `<div class="set"><div><b><span class="dotc f-${k}"></span>${nome}</b><p>${l[k] ? (/\/public\//.test(l[k]) ? 'Atenção: este é o endereço <b>público</b>. Remova e cole o <b>endereço secreto</b> no formato iCal.' : c.erros?.[k] ? 'Atenção: ' + esc(c.erros[k]) : c.contagem?.[k] != null ? `Conectada ✓ · ${c.contagem[k]} eventos entre a semana passada e as próximas 3 semanas` : c.erros?.geral ? 'Ainda não consegui ler (veja o aviso abaixo).' : 'Salva. Toque em “Atualizar agora”.') : 'Cole o endereço secreto iCal desta agenda.'}</p></div>
+  const push = A.enviados('trabalho'), pushTok = S.get('push-token', null);
+  const minAtras = push ? Math.round((Date.now() - push.quando) / 60000) : 0;
+  const linhaPush = push ? `<div class="set"><div><b><span class="dotc f-trabalho"></span>Trabalho (Tutory)</b><p>Conectada pelo Apps Script ✓ · ${push.eventos.length} eventos · atualizada ${minAtras < 1 ? 'agora' : `há ${minAtras} min`}${minAtras > 60 ? '. Faz tempo que não chega nada: confira o script.' : ''}</p></div><button class="btn ghost sm" data-act="gerar-push">Novo código</button></div>` : '';
+  const instrPush = pushTok ? `<details class="note" ${push ? '' : 'open'} style="margin-top:6px"><summary>Conectar a agenda da Tutory pelo Apps Script</summary><ol>
+      <li>Logada na conta <b>da Tutory</b>, abra <a href="https://script.google.com/home/projects/create" target="_blank" rel="noopener">script.google.com → Novo projeto</a>.</li>
+      <li>Apague o que estiver lá e cole <a href="https://raw.githubusercontent.com/acfadias/mentedaanny/main/apps-script/agenda-tutory.gs" target="_blank" rel="noopener">este código</a> (Ctrl+A, Ctrl+C).</li>
+      <li>Na linha <code>const CODIGO</code>, troque o texto pelo seu código: <input class="campo" readonly value="${esc(pushTok)}" onclick="this.select()" style="margin-top:6px"></li>
+      <li>Na barra da esquerda, em <b>Serviços +</b>, adicione <b>Google Calendar API</b>.</li>
+      <li>Salve, escolha a função <b>instalar</b> no topo e clique em <b>Executar</b>. Autorize quando o Google pedir.</li>
+      <li>Pronto: a cada 15 min as reuniões chegam aqui, com o link do Meet.</li></ol></details>` : '';
+  const linha = (k, nome) => k === 'trabalho' && push ? linhaPush + instrPush : `<div class="set"><div><b><span class="dotc f-${k}"></span>${nome}</b><p>${l[k] ? (/\/public\//.test(l[k]) ? 'Atenção: este é o endereço <b>público</b>. Remova e cole o <b>endereço secreto</b> no formato iCal.' : c.erros?.[k] ? 'Atenção: ' + esc(c.erros[k]) : c.contagem?.[k] != null ? `Conectada ✓ · ${c.contagem[k]} eventos entre a semana passada e as próximas 3 semanas` : c.erros?.geral ? 'Ainda não consegui ler (veja o aviso abaixo).' : 'Salva. Toque em “Atualizar agora”.') : 'Cole o endereço secreto iCal desta agenda.'}</p></div>
     ${l[k] ? `<button class="btn ghost sm" data-act="del-agenda" data-k="${k}">Remover</button>` : `<form class="add" data-form="agenda" data-k="${k}" style="margin:0;flex:1;max-width:340px"><input name="t" type="password" placeholder="https://calendar.google.com/…/basic.ics" autocomplete="off"><button class="btn sm">Salvar</button></form>`}</div>`;
   return `<section class="card c-12"><h2>Agendas <small>${c.quando ? 'atualizado às ' + new Date(c.quando).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : ''}</small></h2>
     ${!S.conta() ? '<div class="banner">Entre na sua conta (abaixo) para conectar as agendas.</div>' : ''}
     ${linha('pessoal', 'Pessoal')}${linha('trabalho', 'Trabalho (Tutory)')}
+    ${!push ? (pushTok ? instrPush : `<p class="note">A agenda da empresa não tem link secreto? <button class="btn ghost sm" data-act="gerar-push">Conectar pelo Apps Script</button></p>`) : ''}
     ${c.erros?.geral ? `<div class="banner" style="margin-top:12px">${esc(c.erros.geral)}</div>` : ''}
     <div class="row" style="margin-top:12px"><button class="btn ghost sm" data-act="atualizar-agenda">Atualizar agora</button></div>
     <p class="note">Os links ficam guardados só na sua conta. As agendas são lidas a cada 30 min e quando você abre o app.</p></section>`;
@@ -776,6 +787,14 @@ document.addEventListener('click', e => {
       }
       break;
     }
+    case 'gerar-push': {
+      const velho = S.get('push-token', null);
+      if (velho && !confirm('Gerar um código novo? O script antigo para de funcionar até você trocar o código nele.')) break;
+      const tok = Array.from(crypto.getRandomValues(new Uint8Array(20)), x => x.toString(16).padStart(2, '0')).join('');
+      if (velho) S.set('push:' + velho, null);
+      S.set('push:' + tok, { criado: Date.now() }); S.set('push-token', tok);
+      toast('Código criado. Siga os passos logo abaixo.'); break;
+    }
     case 'gerar-feed': {
       const velho = S.get('feed-token', null);
       if (velho && !confirm('Gerar um link novo? O link antigo para de funcionar e você vai precisar assinar de novo.')) break;
@@ -873,7 +892,7 @@ setInterval(() => { if (pomo.inicio) pintarPomo(); }, 1000);
 
 // ---------- Agendas ----------
 async function recarregarAgenda(manual = false) {
-  try { await A.atualizar(); if (manual) toast('Agendas atualizadas.'); }
+  try { await S.puxar(); await A.atualizar(); if (manual) toast('Agendas atualizadas.'); }
   catch (e) { console.warn(e); const c = A.cache(); c.erros = { ...(c.erros || {}), geral: e.message || 'Não consegui ler as agendas.' }; c.tentativa = Date.now(); S.local('agenda-cache', JSON.stringify(c)); if (manual) toast('Não consegui atualizar as agendas.', 4000); }
   const digitando = document.activeElement && /INPUT|TEXTAREA/.test(document.activeElement.tagName) && document.activeElement.type !== 'checkbox';
   if (!digitando) render();
