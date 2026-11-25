@@ -587,3 +587,5 @@ dialog .row input{min-width:0;border:1px solid var(--line);background:var(--bg);
 .cat-bars button{grid-template-columns:minmax(0,150px) minmax(0,1fr) 84px}
 .cat-bars b{text-align:right}
 @media (max-width:560px){.cat-bars button{grid-template-columns:minmax(0,110px) minmax(0,1fr) 74px}}
+
+.banco-novo{width:150px;animation:itemIn .3s var(--ease) both}

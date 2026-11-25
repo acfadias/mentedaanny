@@ -593,7 +593,7 @@ function telaFinancas() {
         <ul class="list fin-list">${linhas || '<li class="empty">Nenhuma conta neste mês.</li>'}</ul>
         <form class="fin-nova" data-form="conta-nova"><p class="eyebrow" style="margin:18px 0 8px">Nova conta</p>
           <div class="row"><input name="nome" class="mini" placeholder="Nome (ex.: Plano de saúde)" required style="flex:2;min-width:160px">
-          <select name="banco" class="mini">${f.bancos.map(b => `<option>${esc(b)}</option>`).join('')}<option value="__novo">Outro banco…</option></select>
+          <select name="banco" class="mini">${f.bancos.map(b => `<option>${esc(b)}</option>`).join('')}<option value="__novo">+ Outro banco…</option></select><input name="bancoNovo" class="mini banco-novo" placeholder="Nome do banco" hidden>
           <input name="dia" class="mini n" placeholder="dia" inputmode="numeric" style="width:70px">
           <input name="valor" class="mini n" placeholder="valor" inputmode="decimal" required style="width:100px">
           <button class="btn sm">Adicionar</button></div></form>
@@ -615,7 +615,7 @@ function telaFinancas() {
           <div class="row"><input name="desc" class="mini" placeholder="O que foi? (ex.: farmácia)" required style="flex:2;min-width:170px"><input name="valor" class="mini n" placeholder="valor" inputmode="decimal" required style="width:100px"></div>
           <div class="row"><select name="cat" class="mini">${F.CATEGORIAS.map(c => `<option>${c}</option>`).join('')}</select>
             <select name="forma" class="mini">${Object.entries(F.FORMAS).map(([k, v]) => `<option value="${k}">${v}</option>`).join('')}</select>
-            <select name="banco" class="mini" aria-label="Banco ou cartão"><option value="">Banco/cartão</option>${f.bancos.map(b => `<option>${esc(b)}</option>`).join('')}</select>
+            <select name="banco" class="mini" aria-label="Banco ou cartão"><option value="">Banco/cartão</option>${f.bancos.map(b => `<option>${esc(b)}</option>`).join('')}<option value="__novo">+ Outro banco…</option></select><input name="bancoNovo" class="mini banco-novo" placeholder="Nome do banco" hidden>
             <label class="parc">em <input name="parcelas" class="mini n" value="1" inputmode="numeric" style="width:52px" aria-label="Parcelas">x</label>
             <input name="data" type="date" class="mini" value="${dataPadrao}">
             <button class="btn sm">Lançar</button></div></form>
@@ -767,6 +767,7 @@ function celebrar(el, antes) {
 
 app.addEventListener('change', e => {
   const t = e.target;
+  if (t.name === 'banco' && t.form) { const n = t.form.querySelector('[name="bancoNovo"]'); if (n) { n.hidden = t.value !== '__novo'; if (!n.hidden) n.focus(); } return; }
   if (t.dataset.check) { const [d, id] = t.dataset.check.split('|'); toggleCheck(d, id, t.checked, t); }
   else if (t.dataset.topchk) {
     const antes = progresso(montarDia().contaveis, S.get('top3:' + hojeStr(), []));
@@ -814,12 +815,14 @@ app.addEventListener('submit', async e => {
   }
   if (tipo === 'extra-novo') {
     const valor = num(f.valor.value); if (!f.desc.value.trim() || valor == null) return;
-    F.salvar(d => { d.extras = d.extras || []; d.extras.push({ id: uid(), desc: f.desc.value.trim(), valor, cat: f.cat.value, forma: f.forma.value, banco: f.banco.value || null, parcelas: Math.max(1, num(f.parcelas.value) || 1), data: f.data.value || ymd(new Date()) }); });
+    let banco = f.banco.value || null;
+    if (banco === '__novo') { banco = f.bancoNovo.value.trim(); if (!banco) { f.bancoNovo.focus(); toast('Escreva o nome do banco.'); return; } }
+    F.salvar(d => { d.extras = d.extras || []; if (banco && !d.bancos.includes(banco)) d.bancos.push(banco); d.extras.push({ id: uid(), desc: f.desc.value.trim(), valor, cat: f.cat.value, forma: f.forma.value, banco, parcelas: Math.max(1, num(f.parcelas.value) || 1), data: f.data.value || ymd(new Date()) }); });
     toast('Gasto lançado.'); return;
   }
   if (tipo === 'conta-nova') {
     let banco = f.banco.value;
-    if (banco === '__novo') { banco = (prompt('Nome do banco:') || '').trim(); if (!banco) return; }
+    if (banco === '__novo') { banco = f.bancoNovo.value.trim(); if (!banco) { f.bancoNovo.focus(); toast('Escreva o nome do banco.'); return; } }
     const valor = num(f.valor.value); if (!f.nome.value.trim() || valor == null) return;
     F.salvar(d => { if (!d.bancos.includes(banco)) d.bancos.push(banco); d.contas.push({ id: uid(), nome: f.nome.value.trim(), banco, dia: num(f.dia.value) || null, valor, desde: finMes }); });
     toast('Conta adicionada.'); return;
