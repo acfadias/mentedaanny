@@ -699,7 +699,18 @@ app.addEventListener('submit', async e => {
       if (modo === 'criar') { const r = await S.criarConta(f.email.value, f.senha.value); toast(r.session ? 'Conta criada!' : 'Conta criada. Confirme pelo link no seu e-mail.', 5000); }
       else { await S.entrar(f.email.value, f.senha.value); toast('Bem-vinda de volta!'); }
       render();
-    } catch (err) { toast('Não deu: ' + (err.message || err), 5000); }
+    } catch (err) {
+      const m = String(err?.message || err);
+      const txt = /Invalid login credentials/i.test(m) ? 'E-mail ou senha não conferem. Se ainda não criou a conta, use “Criar minha conta”.'
+        : /Email not confirmed/i.test(m) ? 'Falta confirmar o e-mail: abra o link que o Supabase mandou pra você (veja o spam).'
+        : /Signups not allowed|signup.*disabled/i.test(m) ? 'Novos cadastros estão bloqueados no Supabase. Crie o usuário em Authentication → Users → Add user.'
+        : /reading 'auth'|null/i.test(m) ? 'Não consegui conectar ao Supabase. Recarregue a página e tente de novo.'
+        : /rate limit/i.test(m) ? 'Muitas tentativas seguidas. Espere um minuto e tente de novo.'
+        : 'Não deu: ' + m;
+      const box = f.querySelector('.login-erro') || f.appendChild(Object.assign(document.createElement('p'), { className: 'login-erro banner' }));
+      box.textContent = txt;
+      toast(txt, 6000);
+    }
     return;
   }
   const inp = f.querySelector('input[name="t"]'); if (inp) { inp.value = ''; inp.focus(); }
