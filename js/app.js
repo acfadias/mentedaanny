@@ -10,7 +10,7 @@ import * as E from './entregas.js';
 import * as C from './compras.js';
 import { montarDia, planoTcc, remarcarTcc, segunda, TCC_BLOCOS, janelaParaAdiantar, adiantarTcc, pendenciasSemana } from './dia.js';
 
-const VERSAO = '28'; // a mesma versão vai em version.json; o app se atualiza sozinho quando ela muda
+const VERSAO = '29'; // a mesma versão vai em version.json; o app se atualiza sozinho quando ela muda
 const $ = (s, el = document) => el.querySelector(s);
 const app = $('#app');
 const ICO_CORACAO = on => `<svg viewBox="0 0 24 24" width="16" height="16" fill="${on ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10z"/></svg>`;
@@ -212,6 +212,33 @@ function telaHoje() {
     </div></div>`;
 }
 
+let PLANO_COMPRAS = null;
+function saldoCaju() {
+  const f = F.dados(), m = F.mesDe(), p = F.painel(f, m);
+  return p.caju ? p.caju - p.extrasCaju : null;
+}
+function orcamentoCompras(compras) {
+  const manual = S.get('compras:orcamento', null);
+  const caju = saldoCaju();
+  const orc = manual != null && manual !== '' ? Number(manual) : caju;
+  const pl = C.plano(compras, orc);
+  PLANO_COMPRAS = orc != null ? pl : null;
+  if (!compras.some(c => !c.feito)) return '';
+  const pct = v => orc ? Math.min(100, v / orc * 100) : 0;
+  const fora = compras.filter(c => pl.fora.has(c.id));
+  return `<div class="orc ${pl.sobra != null && pl.sobra < 0 ? 'estourou' : ''}">
+    <div class="orc-nums"><div><span>${manual != null && manual !== '' ? 'Orçamento' : 'Saldo do Caju'}</span><b>${orc != null ? F.brl(orc) : '—'}</b></div><div><span>Total da lista</span><b>${F.brl(pl.total)}</b></div><div><span>${pl.sobra == null ? 'Sobra' : pl.sobra >= 0 ? 'Sobra' : 'Passa'}</span><b class="${pl.sobra != null && pl.sobra < 0 ? 'neg' : 'pos'}">${pl.sobra == null ? '—' : F.brl(Math.abs(pl.sobra))}</b></div></div>
+    ${orc ? `<div class="orc-bar">${['essencial', 'importante', 'esperar'].map(p => pl.porPrio[p] ? `<i class="pr-${p}" style="width:${pct(pl.porPrio[p])}%" data-tip="${C.PRIOS[p]}: ${F.brl(pl.porPrio[p])}"></i>` : '').join('')}</div>` : ''}
+    <p class="orc-msg">${orc == null ? 'Cadastre o Caju do mês em Finanças → Resumo, ou defina um orçamento abaixo, para eu calcular o que cabe.'
+      : !pl.total ? 'Coloque os valores dos itens para eu somar e comparar com o saldo.'
+      : pl.sobra >= 0 ? `Cabe tudo. Ainda sobram ${F.brl(pl.sobra)}.`
+      : (() => { const soma = l => F.brl(l.reduce((s2, c) => s2 + (C.totalItem(c) || 0), 0)); const ess = fora.filter(c => C.prioDe(c) === 'essencial'), resto = fora.filter(c => C.prioDe(c) !== 'essencial');
+          return `Não cabe tudo no saldo. ${ess.length ? `Essenciais que passam: <b>${ess.map(c => esc(c.t)).join(', ')}</b> (${soma(ess)}) — pague com outro cartão ou divida. ` : 'Todos os essenciais cabem. '}${resto.length ? `Deixe para depois: <b>${resto.map(c => esc(c.t)).join(', ')}</b> (${soma(resto)}).` : ''}`; })()}
+      ${pl.semPreco ? ` <span class="muted">${pl.semPreco} ${pl.semPreco > 1 ? 'itens' : 'item'} sem valor.</span>` : ''}</p>
+    <details class="note"><summary>Usar outro orçamento</summary><label class="row" style="margin-top:8px">Orçamento desta compra <input class="mini n" data-compras-orc value="${manual ?? ''}" inputmode="decimal" placeholder="${caju != null ? 'Caju: ' + F.brl(caju) : 'R$'}"></label><p style="margin:6px 0 0">Deixe vazio para usar o saldo do Caju do mês.</p></details>
+  </div>`;
+}
+
 function semanaBase() {
   const d = new Date(); const dow = d.getDay();
   const seg = addDias(d, dow === 0 ? 1 : dow === 6 ? 2 : 1 - dow);
@@ -235,11 +262,15 @@ function telaCasa() {
       <section class="card c-7"><h2>Lista de compras <small>${compras.filter(c => !c.feito).length} itens</small></h2>
         <form class="add" data-form="compras"><input name="t" placeholder="Acabou o quê? (ex.: 2 leite, arroz 5 kg)" autocomplete="off" data-k="compras-in" enterkeyhint="send"><button class="btn">Adicionar</button></form>
         <details class="sugestoes"><summary>Sugestões rápidas</summary>${Object.entries(C.SUGESTOES).map(([k, itens]) => { const f = itens.filter(x => !naLista.has(x.toLowerCase())); return f.length ? `<div class="sug-grupo"><span>${C.NOME[k]}</span><div class="chips" style="margin:0">${f.map(x => `<button class="chip" data-act="sugestao" data-t="${esc(x)}">+ ${esc(x)}</button>`).join('')}</div></div>` : ''; }).join('')}</details>
-        ${compras.length ? C.agrupar(compras).map(([k, itens]) => `<div class="compra-grupo"><h3>${C.NOME[k]} <small>${itens.filter(c => !c.feito).length}</small></h3><ul class="list">${itens.map(c => `<li class="li f-pessoal ${c.feito ? 'feito' : ''}"><input type="checkbox" class="chk" data-compra="${c.id}" ${c.feito ? 'checked' : ''} aria-label="${esc(c.t)}"><span class="t">${esc(c.t)}</span>
+        ${orcamentoCompras(compras)}
+        ${compras.length ? C.agrupar(compras).map(([k, itens]) => `<div class="compra-grupo"><h3>${C.NOME[k]} <small>${itens.filter(c => !c.feito).length}</small></h3><ul class="list">${itens.map(c => { const pr = C.prioDe(c), tot = C.totalItem(c), pl = PLANO_COMPRAS;
+          return `<li class="li compra f-pessoal ${c.feito ? 'feito' : ''} ${pl && pl.fora.has(c.id) ? 'fora' : ''}"><input type="checkbox" class="chk" data-compra="${c.id}" ${c.feito ? 'checked' : ''} aria-label="${esc(c.t)}"><span class="t">${esc(c.t)}${tot != null ? `<small class="sub-tot">${F.brl(tot)}</small>` : ''}${pl && pl.fora.has(c.id) ? '<small class="fora-tag">não cabe no Caju</small>' : ''}</span>
+          <button class="prio pr-${pr}" data-act="prio" data-id="${c.id}" title="Prioridade: toque para trocar">${C.PRIOS[pr]}</button>
+          <label class="preco"><span>R$</span><input class="pi" data-compra-preco="${c.id}" value="${c.preco != null ? String(c.preco).replace('.', ',') : ''}" inputmode="decimal" placeholder="valor" aria-label="Valor de ${esc(c.t)}${c.qtd ? ' (por unidade/kg)' : ''}"></label>
           <span class="qtd"><button class="qb" data-act="qtd" data-id="${c.id}" data-d="-1" aria-label="Menos">−</button><input class="qi" data-compra-qtd="${c.id}" value="${esc(c.qtd || '')}" placeholder="qtd" aria-label="Quantidade de ${esc(c.t)}"><button class="qb" data-act="qtd" data-id="${c.id}" data-d="1" aria-label="Mais">+</button></span>
           <select class="cat-sel" data-compra-cat="${c.id}" aria-label="Categoria de ${esc(c.t)}" title="Trocar categoria">${C.CATS.map(([ck, cn]) => `<option value="${ck}" ${ck === k ? 'selected' : ''}>${cn}</option>`).join('')}</select>
-          <button class="x" data-act="del-compra" data-id="${c.id}" aria-label="Apagar">×</button></li>`).join('')}</ul></div>`).join('') : '<p class="empty">Lista vazia. Geladeira feliz.</p>'}
-        ${compras.some(c => c.feito) ? '<div class="row" style="margin-top:12px"><button class="btn ghost sm" data-act="limpar-compras">Limpar comprados</button></div>' : ''}
+          <button class="x" data-act="del-compra" data-id="${c.id}" aria-label="Apagar">×</button></li>`; }).join('')}</ul></div>`).join('') : '<p class="empty">Lista vazia. Geladeira feliz.</p>'}
+        ${compras.some(c => c.feito) ? `<div class="row" style="margin-top:12px">${compras.some(c => c.feito && C.totalItem(c) != null) ? '<button class="btn sm" data-act="fechar-compra">Fechar compra e lançar no Caju</button>' : ''}<button class="btn ghost sm" data-act="limpar-compras">Limpar comprados</button></div>` : ''}
       </section>
       <section class="card line c-5"><h2>Como funciona</h2><div class="note">
         <p><b>Louça</b> dia sim, dia não: seg, qua e sex.</p>
@@ -826,6 +857,8 @@ app.addEventListener('change', e => {
   else if (t.dataset.pago) { F.marcarPago(t.dataset.pago, t.checked, finMes || F.mesDe()); if (t.checked) { confeteEm(t, 14); toast('Conta paga. Uma preocupação a menos.'); } }
   else if (t.dataset.fin) salvarFin(t);
   else if (t.dataset.trab) { S.update('trabalho:tarefas', [], l => { const c = l.find(x => x.id === t.dataset.trab); if (c) c.feito = t.checked; }); if (t.checked) { confeteEm(t, 14); toast(sortear(AO_MARCAR)); } }
+  else if (t.dataset.compraPreco) { const n = num(t.value); S.update('compras', [], l => { const c = l.find(x => x.id === t.dataset.compraPreco); if (c) c.preco = t.value.trim() === '' ? null : n; }); }
+  else if ('comprasOrc' in t.dataset) { const n = num(t.value); S.set('compras:orcamento', t.value.trim() === '' || n == null ? null : n); }
   else if (t.dataset.compraQtd) { S.update('compras', [], l => { const c = l.find(x => x.id === t.dataset.compraQtd); if (c) c.qtd = t.value.trim(); }); }
   else if (t.dataset.compraCat) { S.update('compras', [], l => { const c = l.find(x => x.id === t.dataset.compraCat); if (c) c.cat = t.value; }); toast('Categoria trocada.'); }
   else if (t.dataset.compra) { S.update('compras', [], l => { const c = l.find(x => x.id === t.dataset.compra); if (c) c.feito = t.checked; }); if (t.checked) { confeteEm(t, 12); toast('Comprado! ✓'); } }
@@ -930,6 +963,15 @@ document.addEventListener('click', e => {
     }
     case 'pular': S.update('checks:' + b.dataset.d, {}, ch => { ch['pulou:' + id] = Date.now(); }); toast('Deixado pra lá. Sem culpa.'); break;
     case 'qtd': S.update('compras', [], l => { const c = l.find(x => x.id === id); if (c) c.qtd = C.passo(c.qtd, Number(b.dataset.d)); }); break;
+    case 'prio': S.update('compras', [], l => { const c = l.find(x => x.id === id); if (c) c.prio = C.proxPrio(C.prioDe(c)); }); break;
+    case 'fechar-compra': {
+      const comp = S.get('compras', []).filter(c => c.feito && C.totalItem(c) != null);
+      const total = Math.round(comp.reduce((s2, c) => s2 + C.totalItem(c), 0) * 100) / 100;
+      if (!total || !confirm(`Lançar ${F.brl(total)} (${comp.length} itens) como gasto no Caju em Finanças?`)) break;
+      F.salvar(d => { d.extras = d.extras || []; d.extras.push({ id: uid(), desc: 'Compras do mercado', valor: total, cat: 'Mercado', forma: 'caju', pessoa: 'casal', parcelas: 1, data: hojeStr(), itens: comp.map(c => `${c.qtd ? c.qtd + ' ' : ''}${c.t}`).join(', ') }); });
+      S.update('compras', [], l => l.filter(x => !x.feito));
+      festa(); toast(`Compra lançada: ${F.brl(total)} no Caju.`, 4000); break;
+    }
     case 'sugestao': S.update('compras', [], l => { l.unshift({ id: uid(), t: b.dataset.t }); }); break;
     case 'del-compra': S.update('compras', [], l => l.filter(x => x.id !== id)); break;
     case 'limpar-compras': S.update('compras', [], l => l.filter(x => !x.feito)); toast('Lista limpinha.'); break;

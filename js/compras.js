@@ -61,3 +61,39 @@ export function passo(qtd, d) {
   const un = m ? m[2] : '';
   return novo ? `${String(novo).replace('.', ',')}${un ? ' ' + un : ''}` : '';
 }
+
+// ---------- Valores, prioridade e orçamento ----------
+export const PRIOS = { essencial: 'Essencial', importante: 'Importante', esperar: 'Pode esperar' };
+const PRIO_CAT = { hortifruti: 'essencial', acougue: 'essencial', frios: 'essencial', mercearia: 'essencial', higiene: 'essencial', bebe: 'essencial', farmacia: 'essencial', pets: 'essencial', limpeza: 'importante', padaria: 'importante', bebidas: 'esperar', congelados: 'esperar', outros: 'importante' };
+export const prioDe = c => PRIOS[c.prio] ? c.prio : PRIO_CAT[catDe(c)] || 'importante';
+export const proxPrio = p => ({ essencial: 'importante', importante: 'esperar', esperar: 'essencial' })[p];
+
+// quantidade numérica: "2" → 2, "1,5 kg" → 1.5, "500 g" → 0.5 (valor por kg/litro), texto → 1
+export function qtdNum(q) {
+  const m = String(q || '').match(/(\d+(?:[.,]\d+)?)\s*([a-zç]*)/i);
+  if (!m) return 1;
+  const n = Number(m[1].replace(',', '.'));
+  return /^(g|gr|ml)$/i.test(m[2]) ? n / 1000 : n;
+}
+export const totalItem = c => c.preco != null && c.preco !== '' ? Number(c.preco) * qtdNum(c.qtd) : null;
+
+// Plano: o que cabe no orçamento, por prioridade (essencial → importante → pode esperar), na ordem da lista
+export function plano(lista, orcamento) {
+  const abertos = lista.filter(c => !c.feito);
+  const total = abertos.reduce((s, c) => s + (totalItem(c) || 0), 0);
+  const semPreco = abertos.filter(c => totalItem(c) == null).length;
+  const porPrio = { essencial: 0, importante: 0, esperar: 0 };
+  for (const c of abertos) porPrio[prioDe(c)] += totalItem(c) || 0;
+  const cabe = new Set(), fora = new Set();
+  let resta = orcamento ?? Infinity;
+  let faltouMaisImportante = false; // se um essencial não coube, nada de prioridade menor entra na frente dele
+  for (const p of ['essencial', 'importante', 'esperar']) {
+    let faltouAqui = false;
+    for (const c of abertos.filter(x => prioDe(x) === p)) {
+      const v = totalItem(c); if (v == null) continue;
+      if (!faltouMaisImportante && v <= resta + 0.005) { cabe.add(c.id); resta -= v; } else { fora.add(c.id); faltouAqui = true; }
+    }
+    if (faltouAqui) faltouMaisImportante = true;
+  }
+  return { total, semPreco, porPrio, cabe, fora, sobra: orcamento == null ? null : orcamento - total, comprado: lista.filter(c => c.feito).reduce((s, c) => s + (totalItem(c) || 0), 0) };
+}

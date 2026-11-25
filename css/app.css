@@ -654,3 +654,26 @@ dialog .row input{min-width:0;border:1px solid var(--line);background:var(--bg);
 .qi::placeholder{color:var(--muted);opacity:.6}
 .li.feito .qtd{opacity:.5}
 @media (max-width:480px){.qi{width:44px}.qb{width:22px}}
+/* ---------- Compras: valores, prioridade e orçamento do Caju ---------- */
+.pr-essencial{--pr:var(--accent)}.pr-importante{--pr:var(--ch-extras)}.pr-esperar{--pr:var(--muted)}
+.li.compra{flex-wrap:wrap;row-gap:6px}
+.li.compra .t{display:flex;flex-direction:column;min-width:110px}
+.sub-tot{font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums}
+.fora-tag{font-size:11px;color:var(--accent);font-weight:600}
+.li.compra.fora .t{opacity:.75}
+.prio{border:1px solid var(--pr);color:var(--pr);background:transparent;border-radius:999px;font-size:11px;font-weight:600;padding:3px 9px;cursor:pointer;white-space:nowrap;transition:background-color .2s,color .2s,transform .3s var(--spring)}
+.prio.pr-essencial{background:var(--pr);color:var(--on-accent)}
+.prio:active{transform:scale(.9)}
+.preco{display:inline-flex;align-items:center;gap:2px;border:1px solid var(--line);border-radius:999px;background:var(--bg);padding:0 8px;font-size:12px;color:var(--muted)}
+.pi{width:62px;border:0;background:transparent;font-size:14px;padding:5px 0;text-align:right;outline:none;font-variant-numeric:tabular-nums;color:var(--fg)}
+.pi::placeholder{color:var(--muted);opacity:.6}
+.orc{background:var(--bg);border-radius:16px;padding:14px 16px;margin:12px 0 4px;border:1px solid var(--line)}
+.orc.estourou{border-color:var(--accent)}
+.orc-nums{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.orc-nums span{display:block;font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);font-weight:600}
+.orc-nums b{font-family:var(--display);font-weight:400;font-size:clamp(20px,2.2vw,26px);font-variant-numeric:tabular-nums}
+.orc-nums b.neg{color:var(--accent)}.orc-nums b.pos{color:var(--ok)}
+.orc-bar{display:flex;gap:2px;height:10px;border-radius:6px;background:var(--line);overflow:hidden;margin:10px 0 8px}
+.orc-bar i{display:block;background:var(--pr);animation:cresce .8s var(--ease) both;transform-origin:left}
+.orc-msg{margin:0 0 6px;font-size:14px;line-height:1.5}
+@media (max-width:560px){.li.compra .t{flex-basis:calc(100% - 40px)}.li.compra{padding-left:0}.orc-nums b{font-size:19px}}
