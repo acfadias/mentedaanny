@@ -11,6 +11,12 @@ Site estático (GitHub Pages) + Supabase para sincronizar entre aparelhos com lo
 4. **URL de retorno do login:** Supabase → *Authentication* → *URL Configuration* → *Site URL* = `https://acfadias.github.io/mentedaanny/`.
 5. No app, *Ajustes* → **Criar minha conta**. Depois, no Supabase → *Authentication* → *Sign In / Providers* → desligar **Allow new users to sign up**.
 
+## Funções do Supabase (Edge Functions → Deploy a new function → Via Editor)
+| Nome | Código | Verify JWT |
+|---|---|---|
+| `agenda` | [`supabase/functions/agenda/index.ts`](supabase/functions/agenda/index.ts) — lê as agendas do Google (links iCal) | desligado |
+| `feed` | [`supabase/functions/feed/index.ts`](supabase/functions/feed/index.ts) — link de agenda com tudo que é criado no app | desligado |
+
 ## Onde mexer
 | Arquivo | O quê |
 |---|---|

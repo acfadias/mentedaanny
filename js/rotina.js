@@ -24,6 +24,12 @@ export const CASA = [
   { id: 'chao', titulo: 'Limpar o chão', hora: '20:00', dur: 30, dias: [3, 5], icone: '🧹' },
 ];
 
+export const TRABALHO_FIXO = [
+  { id: 'prospectar', titulo: '🎯 Prospectar novos clientes', hora: '09:00', dur: 60, sub: 'Rotina fixa · trabalho' },
+  { id: 'rotinaprosp', titulo: '📋 Rotina de prospecção', hora: '10:00', dur: 15, sub: 'Rotina fixa · trabalho' },
+  { id: 'audios', titulo: '🎙 Enviar os áudios', hora: '10:15', dur: 15, sub: 'Rotina fixa · trabalho' },
+];
+
 export const DEVO_MANHA = '08:00', DEVO_LIMITE = '12:00', DEVO_NOITE = '21:00';
 
 export const checks = data => get('checks:' + data, {});
@@ -63,6 +69,9 @@ export function itensDoDia(d = new Date(), agora = new Date()) {
       }
     }
   }
+
+  // Rotinas fixas do trabalho (seg a sex)
+  if (!bebe && util(d)) for (const t of TRABALHO_FIXO) itens.push({ id: t.id, area: 'trabalho', fonte: 'trabalho', titulo: t.titulo, hora: t.hora, dur: t.dur, sub: t.sub, fixo: true });
 
   itens.push({ id: 'vitamina', area: 'saude', titulo: '💊 Vitamina pré-natal', hora: '20:30', dur: 5, sub: 'Depois do jantar' });
 

@@ -406,3 +406,9 @@ dialog .row input{min-width:0;border:1px solid var(--line);background:var(--bg);
 @media (max-width:720px){.wk-grid{grid-template-columns:1fr}.wk-list li{font-size:14px}.wk-add{opacity:1}.wk-dia header{flex-direction:row}.wk-h{flex-direction:row;align-items:baseline;gap:8px}}
 @media (hover:none){.wk-add{opacity:1}}
 @media (max-width:820px){.tabs .so-pc{display:none}}
+
+.a-trabalho{--a:var(--fg)}
+.pend .li{align-items:flex-start}
+.pend .fdot{margin-top:5px}
+.pend-acts{display:flex;gap:4px;align-items:center;flex-wrap:wrap;justify-content:flex-end}
+@media (max-width:480px){.pend .li{flex-wrap:wrap}.pend-acts{width:100%;justify-content:flex-start;padding-left:26px}}

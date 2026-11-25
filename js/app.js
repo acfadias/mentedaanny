@@ -5,7 +5,7 @@ import { PLANO, ETAPAS, CURTA, doDia } from './devocional-plano.js';
 import { FRASES, CATEGORIAS, AO_MARCAR, DIA_COMPLETO, DIA_DIFICIL, sortear } from './afirmacoes.js';
 import { confeteEm, festa, toast } from './efeitos.js';
 import * as A from './agenda.js';
-import { montarDia, planoTcc, remarcarTcc, segunda, TCC_BLOCOS } from './dia.js';
+import { montarDia, planoTcc, remarcarTcc, segunda, TCC_BLOCOS, janelaParaAdiantar, adiantarTcc, pendenciasSemana } from './dia.js';
 
 const $ = (s, el = document) => el.querySelector(s);
 const app = $('#app');
@@ -55,7 +55,7 @@ function anel(p, tam = 118) {
     <div class="txt"><div><b>${p.ok}/${p.total}</b><span>feitos</span></div></div></div>`;
 }
 
-const FONTE_DE_AREA = { fe: 'pessoal', casa: 'pessoal', saude: 'pessoal', estudo: 'faculdade' };
+const FONTE_DE_AREA = { fe: 'pessoal', casa: 'pessoal', saude: 'pessoal', estudo: 'faculdade', trabalho: 'trabalho' };
 const ORDEM_FONTES = ['pessoal', 'trabalho', 'faculdade'];
 const proxFonte = f => ORDEM_FONTES[(ORDEM_FONTES.indexOf(f || 'pessoal') + 1) % ORDEM_FONTES.length];
 const fonteBtn = (f, act, i) => `<button class="fdot f-${f || 'pessoal'}" data-act="${act}" data-i="${i}" title="${FONTE_NOME[f || 'pessoal']} — toque para trocar" aria-label="Agenda: ${FONTE_NOME[f || 'pessoal']}. Toque para trocar"></button>`;
@@ -104,6 +104,8 @@ function cardConvergencia(dia) {
   const linhas = [];
   if (dia.horasReuniao >= 4) linhas.push(`<li>📅 <b>Dia cheio:</b> ${fmtH(dia.horasReuniao)} de compromissos. Foque no essencial e nas 3 prioridades.</li>`);
   for (const m of dia.mudancas) linhas.push(`<li>↪ <b>${esc(m.titulo)}</b> foi de ${m.de} pra <b>${m.para}</b> por causa de “${esc(m.motivo)}”.</li>`);
+  const jan = janelaParaAdiantar();
+  if (jan) linhas.push(`<li class="row" style="gap:10px">✨ <span style="flex:1;min-width:200px">Você tem uma <b>janela livre às ${jan.hora}</b> no expediente. Se o trabalho estiver tranquilo, dá pra adiantar o TCC de hoje à noite (${jan.bloco.hora}).</span><button class="btn sm" data-act="adiantar" data-id="${jan.bloco.id}" data-hora="${jan.hora}">Adiantar pra ${jan.hora}</button></li>`);
   if (amanha.horasReuniao >= 4) linhas.push(`<li>🔭 <b>Amanhã</b> tem ${fmtH(amanha.horasReuniao)} de compromissos. Que tal adiantar algo hoje?</li>`);
   if (!linhas.length) return '';
   return `<section class="card line conv"><h2>Convergências <small>eu reorganizei pra você</small></h2><ul class="note" style="margin:0;padding-left:0;list-style:none;display:flex;flex-direction:column;gap:8px">${linhas.join('')}</ul></section>`;
@@ -121,6 +123,18 @@ function cardProximo(itens, p) {
     <input type="checkbox" class="chk" data-check="${prox.data}|${prox.id}" aria-label="Marcar ${esc(prox.titulo)}">
     <div style="min-width:0"><p class="eyebrow">Próximo passo · ${prox.hora}</p><div class="big">${esc(prox.titulo)}</div>
     ${dificil ? `<p style="margin:8px 0 0;opacity:.9;font-size:14px">${esc(sortear(DIA_DIFICIL))}</p>` : ''}</div></section>`;
+}
+
+function cardPendencias() {
+  const pend = pendenciasSemana();
+  if (!pend.length) return '';
+  return `<section class="card line pend"><h2>Ficou pra trás <small>${pend.length} desta semana</small></h2>
+    <p class="note" style="margin-top:0">Sem culpa: escolha o que ainda faz sentido. O resto, deixa pra lá.</p>
+    <ul class="list">${pend.map(p => `<li class="li f-${p.fonte}"><span class="fdot f-${p.fonte}" style="cursor:default"></span>
+      <span class="t">${esc(p.titulo)}<br><small class="muted">${DIAS[p.d.getDay()].toLowerCase()}, ${p.d.getDate()}</small></span>
+      <span class="pend-acts"><button class="btn ghost sm" data-act="pend" data-v="feito" data-tipo="${p.tipo}" data-d="${p.data}" data-id="${p.id ?? ''}" data-i="${p.i ?? ''}" title="Já fiz">✓ fiz</button>
+      <button class="btn ghost sm" data-act="pend" data-v="hoje" data-tipo="${p.tipo}" data-d="${p.data}" data-id="${p.id ?? ''}" data-i="${p.i ?? ''}" data-t="${esc(p.titulo)}" data-f="${p.fonte}" title="Trazer pra hoje">→ hoje</button>
+      <button class="x" data-act="pend" data-v="pular" data-tipo="${p.tipo}" data-d="${p.data}" data-id="${p.id ?? ''}" data-i="${p.i ?? ''}" title="Deixar pra lá">×</button></span></li>`).join('')}</ul></section>`;
 }
 
 function cardTop3(data) {
@@ -155,7 +169,7 @@ function telaHoje() {
     </div>
     <div class="grid">
       <div class="c-7 stack">${cardAgenda(dia)}${cardProximo(itens, p)}${cardConvergencia(dia)}<section class="card"><h2>Seu dia <span class="row">${legenda()}<small>${itens.filter(i => i.feito).length} de ${itens.length} tarefas</small><button class="btn ghost sm" data-act="novo-comp">+ Compromisso</button></span></h2>${linhaDoTempo(dia)}</section></div>
-      <div class="c-5 stack">${cardTop3(data)}${cardCaixa()}</div>
+      <div class="c-5 stack">${cardTop3(data)}${cardPendencias()}${cardCaixa()}</div>
     </div></div>`;
 }
 
@@ -285,6 +299,7 @@ function telaAjustes() {
         <div class="set"><div><b>Avisos com o app aberto</b><p>Notifica no horário de cada tarefa enquanto o site estiver aberto.</p></div><button class="btn ghost sm" data-act="notif">${'Notification' in window && Notification.permission === 'granted' ? 'Ativados ✓' : 'Ativar'}</button></div></section>
       <section class="card c-6"><h2>Frases ♡</h2><p class="note">Suas afirmações, favoritas e frases próprias.</p><a class="btn ghost" href="#frases">Abrir frases</a></section>
       ${cardAgendas()}
+      ${cardFeed()}
       <section class="card c-12"><h2>Conta e sincronização</h2>${contaHtml}</section>
     </div></div>`;
 }
@@ -327,7 +342,7 @@ function telaFaculdade() {
             <span class="t"><b>${DIAS[d.getDay()]}</b>, ${b.hora}–${String(+b.hora.slice(0, 2) + 1).padStart(2, '0')}:00${b.remarcado ? `<br><small class="muted">${esc(b.remarcado)}</small>` : ''}</span>
             ${ok ? '' : `<button class="btn ghost sm" data-act="remarcar-tcc" data-id="${b.id}">Remarcar</button>`}</li>`; }).join('')}</ul>`
           : `<p class="empty">${temLinks && !A.cache().quando ? 'Carregando suas agendas pra achar os horários livres…' : 'Os blocos da semana aparecem aqui.'}</p>`}
-          <p class="note" style="margin:12px 0 0">Eu encaixo 4 blocos de 1h nos horários livres (fora de reuniões e do almoço). Se aparecer uma reunião em cima ou um bloco ficar pra trás, eu remarco sozinha — sem culpa.</p></section>
+          <p class="note" style="margin:12px 0 0">Eu encaixo 4 blocos de 1h <b>à noite</b> (entre 18h45 e 22h15), sem atropelar a rotina da casa. Se sobrar janela livre no expediente, eu sugiro adiantar. Se aparecer uma reunião em cima ou um bloco ficar pra trás, eu remarco sozinha — sem culpa.</p></section>
         <section class="card line"><h2>Próximo passo do TCC</h2><p class="note" style="margin-top:0">Escreva a próxima ação bem pequena e concreta. Fica muito mais fácil começar.</p>
           <input class="campo" data-campo="tcc:proximo" data-k="tcc-prox" value="${esc(S.get('tcc:proximo', ''))}" placeholder="Ex.: reler o resumo do artigo 3 e anotar 3 ideias"></section>
         <section class="card"><h2>Aulas e compromissos <small>próximos 7 dias</small></h2>
@@ -384,6 +399,21 @@ function cardAgendas() {
     <p class="note">Os links ficam guardados só na sua conta. As agendas são lidas a cada 30 min e quando você abre o app.</p></section>`;
 }
 
+const FEED_BASE = 'https://xvlcbqyjzomzfnewuqpi.supabase.co/functions/v1/feed?t=';
+function cardFeed() {
+  const tok = S.get('feed-token', null);
+  const url = tok ? FEED_BASE + tok : '';
+  return `<section class="card c-12"><h2>Levar o app pra sua agenda <small>assine uma vez só</small></h2>
+    <p class="note" style="margin-top:0">Um link de agenda com tudo que você cria aqui: compromissos, blocos de TCC e rotinas do trabalho. Você assina uma vez e o que mudar no app aparece sozinho na agenda.</p>
+    ${!S.conta() ? '<div class="banner">Entre na sua conta para gerar o link.</div>' : tok ? `<div class="row"><input class="campo" readonly value="${esc(url)}" style="flex:1;min-width:220px" onclick="this.select()"><button class="btn" data-act="copiar-feed">Copiar link</button></div>
+      <details class="note" style="margin-top:12px" open><summary>Como assinar</summary><ol>
+        <li><b>Google Agenda (computador, conta pessoal):</b> na esquerda, ao lado de “Outras agendas”, clique em <b>+</b> → <b>Do URL</b> → cole o link → <b>Adicionar agenda</b>. Depois escolha a cor rosé.</li>
+        <li><b>iPhone/iPad (com alertas):</b> Ajustes → Calendário → Contas → Adicionar Conta → Outra → <b>Adicionar Calendário Assinado</b> → cole o link. Deixe “Remover Alertas” desligado.</li>
+        <li>O Google atualiza agendas assinadas por conta própria (pode levar algumas horas). O iPhone permite escolher “a cada 15 min”.</li></ol></details>
+      <div class="row" style="margin-top:10px"><button class="btn ghost sm" data-act="gerar-feed">Gerar link novo (o antigo para de funcionar)</button></div>`
+    : '<button class="btn" data-act="gerar-feed">Gerar meu link de agenda</button>'}</section>`;
+}
+
 function dialogoCompromisso(fonte = 'trabalho', dataPadrao = null) {
   const d = new Date(); const h = String(Math.min(22, d.getHours() + 1)).padStart(2, '0');
   let dlg = document.getElementById('dlg-comp');
@@ -431,6 +461,7 @@ function telaSemana() {
       <div class="hero-side"><div class="wk-nav"><button class="round" data-act="semana" data-v="-1" aria-label="Semana anterior">‹</button>${semanaOffset ? '<button class="btn ghost sm" data-act="semana" data-v="0">Hoje</button>' : ''}<button class="round" data-act="semana" data-v="1" aria-label="Próxima semana">›</button></div></div></div>
     <div class="wk-resumo">${legenda()}<span>${fmtH(totH) || '0 h'} de compromissos</span><span>${totOk} de ${totT} tarefas feitas</span></div>
     <div class="wk-grid">${cols}</div>
+    ${semanaOffset === 0 ? `<div class="grid" style="margin-top:22px"><div class="c-6">${cardPendencias()}</div></div>` : ''}
   </div>`;
 }
 
@@ -575,6 +606,30 @@ document.addEventListener('click', e => {
     case 'sair': S.sair().then(() => render()); break;
     case 'fonte-top': S.update('top3:' + hojeStr(), () => [{ t: '' }, { t: '' }, { t: '' }], top => { const p = top[+b.dataset.i]; p.fonte = proxFonte(p.fonte); }); break;
     case 'fonte-caixa': S.update('caixa', [], l => { const c = l[+b.dataset.i]; if (c) c.fonte = proxFonte(c.fonte); }); break;
+    case 'adiantar': adiantarTcc(id, b.dataset.hora); confeteEm(b, 16); toast(`TCC adiantado pra ${b.dataset.hora}. Sua noite ficou livre! 🌙`, 4000); break;
+    case 'pend': {
+      const { v, tipo, d: data, i } = b.dataset;
+      const marcar = fn => tipo === 'top' ? S.update('top3:' + data, [], t => { if (t[+i]) fn(t[+i]); }) : null;
+      if (v === 'feito') { if (tipo === 'top') marcar(p => { p.feito = true; }); else S.update('checks:' + data, {}, ch => { ch[id] = Date.now(); }); confeteEm(b, 16); toast('Feito, mesmo que atrasado, conta! 🤍'); }
+      if (v === 'pular') { if (tipo === 'top') marcar(p => { p.pulou = true; }); else S.update('checks:' + data, {}, ch => { ch['pulou:' + id] = Date.now(); }); toast('Deixado pra lá. Sem culpa.'); }
+      if (v === 'hoje') {
+        let foi = 'prioridade';
+        S.update('top3:' + hojeStr(), () => [{ t: '' }, { t: '' }, { t: '' }], top => { const k = top.findIndex(p => !p.t?.trim()); if (k >= 0) top[k] = { t: b.dataset.t, fonte: b.dataset.f }; else foi = 'caixa'; });
+        if (foi === 'caixa') S.update('caixa', [], l => { l.unshift({ id: uid(), t: b.dataset.t, fonte: b.dataset.f }); });
+        if (tipo === 'top') marcar(p => { p.pulou = true; }); else S.update('checks:' + data, {}, ch => { ch['pulou:' + id] = Date.now(); });
+        toast(foi === 'caixa' ? 'Prioridades cheias: coloquei na caixa de entrada.' : 'Trouxe pra hoje como prioridade.');
+      }
+      break;
+    }
+    case 'gerar-feed': {
+      const velho = S.get('feed-token', null);
+      if (velho && !confirm('Gerar um link novo? O link antigo para de funcionar e você vai precisar assinar de novo.')) break;
+      const tok = Array.from(crypto.getRandomValues(new Uint8Array(20)), x => x.toString(16).padStart(2, '0')).join('');
+      if (velho) S.set('feed:' + velho, null);
+      S.set('feed:' + tok, { criado: Date.now() }); S.set('feed-token', tok);
+      toast('Link criado! Agora é só assinar. 📅'); break;
+    }
+    case 'copiar-feed': navigator.clipboard?.writeText(FEED_BASE + S.get('feed-token', '')).then(() => toast('Link copiado ✓'), () => toast('Selecione o link e copie.')); break;
     case 'novo-comp': dialogoCompromisso(b.dataset.fonte, b.dataset.data); break;
     case 'semana': semanaOffset = b.dataset.v === '0' ? 0 : semanaOffset + Number(b.dataset.v); render(true); break;
     case 'del-comp': if (confirm('Apagar este compromisso?')) S.update('compromissos', [], l => l.filter(c => c.id !== id)); break;
