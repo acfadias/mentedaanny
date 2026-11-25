@@ -16,10 +16,12 @@ const util = d => d.getDay() >= 1 && d.getDay() <= 5;
 
 // Tarefas da casa: dia da semana (1=seg … 5=sex)
 export const CASA = [
-  { id: 'louca', titulo: 'Lavar a louça', hora: '19:30', dias: [1, 3, 5], icone: '🍽' },
-  { id: 'roupa', titulo: 'Lavar roupa', hora: '19:30', dias: [2, 4], icone: '🧺' },
-  { id: 'chao', titulo: 'Limpar o chão', hora: '20:00', dias: [3, 5], icone: '🧹' },
-  { id: 'checkcasa', titulo: 'Checar cozinha e escritório', hora: '18:30', dias: [1, 2, 3, 4, 5], icone: '✓', sub: 'Cozinha limpa · escritório em ordem · 15 min' },
+  { id: 'garagem', titulo: 'Lavar a garagem', hora: '12:00', dur: 40, dias: [5], icone: '🚿', sub: 'Na hora do almoço' },
+  { id: 'checkcasa', titulo: 'Checar cozinha e escritório', hora: '18:30', dur: 15, dias: [1, 2, 3, 4, 5], icone: '✓', sub: 'Cozinha limpa · escritório em ordem · 15 min' },
+  { id: 'louca', titulo: 'Lavar a louça', hora: '19:30', dur: 30, dias: [1, 3, 5], icone: '🍽' },
+  { id: 'roupa', titulo: 'Lavar roupa', hora: '19:30', dur: 30, dias: [2, 4], icone: '🧺' },
+  { id: 'cachorros', titulo: 'Limpar a área dos cachorros', hora: '20:00', dur: 20, dias: [2, 4], icone: '🐾' },
+  { id: 'chao', titulo: 'Limpar o chão', hora: '20:00', dur: 30, dias: [3, 5], icone: '🧹' },
 ];
 
 export const DEVO_MANHA = '08:00', DEVO_LIMITE = '12:00', DEVO_NOITE = '21:00';
@@ -41,13 +43,13 @@ export function itensDoDia(d = new Date(), agora = new Date()) {
   const movido = !devoFeito && passouLimite;
   itens.push({
     id: 'devocional', area: 'fe', titulo: bebe ? 'Devocional (versão curta)' : 'Devocional',
-    hora: movido ? DEVO_NOITE : DEVO_MANHA,
+    hora: movido ? DEVO_NOITE : DEVO_MANHA, dur: bebe ? 10 : 30,
     sub: movido ? 'Foi para a noite — sem problema 🤍' : (bebe ? 'Salmo + uma frase + oração' : '20–30 min · antes do trabalho'),
     tag: movido ? 'movido pra noite' : null, link: '#devocional',
   });
 
   if (!bebe && util(d)) {
-    for (const t of CASA) if (t.dias.includes(d.getDay())) itens.push({ id: t.id, area: 'casa', titulo: `${t.icone} ${t.titulo}`, hora: t.hora, sub: t.sub || null });
+    for (const t of CASA) if (t.dias.includes(d.getDay())) itens.push({ id: t.id, area: 'casa', titulo: `${t.icone} ${t.titulo}`, hora: t.hora, dur: t.dur, sub: t.sub || null });
     // Pendências do último dia útil anterior (opcional, sem culpa)
     const inicio = get('inicio', null);
     if (hoje) {
@@ -56,18 +58,18 @@ export function itensDoDia(d = new Date(), agora = new Date()) {
       for (const t of CASA) {
         if (t.id === 'checkcasa') continue;
         if ((!inicio || ymd(ant) >= inicio) && t.dias.includes(ant.getDay()) && !chAnt[t.id] && !t.dias.includes(d.getDay()) && !chAnt['pulou:' + t.id]) {
-          itens.push({ id: t.id, data: ymd(ant), area: 'casa', titulo: `${t.icone} ${t.titulo}`, hora: '19:00', sub: `Ficou de ${DIAS[ant.getDay()].toLowerCase()} · opcional`, tag: 'de ontem', opcional: true });
+          itens.push({ id: t.id, data: ymd(ant), area: 'casa', titulo: `${t.icone} ${t.titulo}`, hora: '19:00', dur: CASA.find(c => c.id === t.id).dur, sub: `Ficou de ${DIAS[ant.getDay()].toLowerCase()} · opcional`, tag: 'de ontem', opcional: true });
         }
       }
     }
   }
 
-  itens.push({ id: 'vitamina', area: 'saude', titulo: '💊 Vitamina pré-natal', hora: '20:30', sub: 'Depois do jantar' });
+  itens.push({ id: 'vitamina', area: 'saude', titulo: '💊 Vitamina pré-natal', hora: '20:30', dur: 5, sub: 'Depois do jantar' });
 
   if (bebe) {
-    itens.push({ id: 'agua1', area: 'saude', titulo: '💧 Água — 1º litro', hora: '10:00' });
-    itens.push({ id: 'agua2', area: 'saude', titulo: '💧 Água — 2º litro', hora: '15:00' });
-    itens.push({ id: 'descanso', area: 'saude', titulo: '🌙 Descansar 20 min', hora: '14:00', sub: 'Deitar, sem tela. Isso também é tarefa.' });
+    itens.push({ id: 'agua1', area: 'saude', titulo: '💧 Água — 1º litro', hora: '10:00', dur: 5 });
+    itens.push({ id: 'agua2', area: 'saude', titulo: '💧 Água — 2º litro', hora: '15:00', dur: 5 });
+    itens.push({ id: 'descanso', area: 'saude', titulo: '🌙 Descansar 20 min', hora: '14:00', dur: 20, sub: 'Deitar, sem tela. Isso também é tarefa.' });
   }
 
   for (const it of itens) { it.data = it.data || data; it.feito = feito(it.data, it.id); }

@@ -136,4 +136,11 @@ export async function criarConta(email, senha) {
   if (error) throw error;
   return data;
 }
+export async function funcao(nome) {
+  if (!sb || !usuario) return null;
+  await enviar();
+  const { data, error } = await sb.functions.invoke(nome, { method: 'POST', body: {} });
+  if (error) throw error;
+  return data;
+}
 export async function sair() { await sb?.auth.signOut(); }

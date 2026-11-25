@@ -1,9 +1,11 @@
 import * as S from './store.js';
 import { NOME } from './config.js';
-import { itensDoDia, progresso, saudacao, dataLonga, ymd, deYmd, addDias, minutos, agoraMin, CASA, DIAS, DIAS_CURTO, MESES } from './rotina.js';
+import { progresso, saudacao, dataLonga, ymd, deYmd, addDias, minutos, agoraMin, CASA, DIAS, DIAS_CURTO, MESES } from './rotina.js';
 import { PLANO, ETAPAS, CURTA, doDia } from './devocional-plano.js';
 import { FRASES, CATEGORIAS, AO_MARCAR, DIA_COMPLETO, DIA_DIFICIL, sortear } from './afirmacoes.js';
 import { confeteEm, festa, toast } from './efeitos.js';
+import * as A from './agenda.js';
+import { montarDia, planoTcc, remarcarTcc, segunda, TCC_BLOCOS } from './dia.js';
 
 const $ = (s, el = document) => el.querySelector(s);
 const app = $('#app');
@@ -32,16 +34,16 @@ function fraseDoMomento(salto = 0) {
   return pool[Math.abs(Math.sin(semente) * 1e6 | 0) % pool.length];
 }
 
-function cardFrase(salto = fraseExtra) {
+function cardFrase(salto = fraseExtra, anelHtml = '') {
   const f = fraseDoMomento(salto);
   const fav = S.get('afirmacoes', {}).favs?.includes(f.id);
-  return `<section class="card frase">
+  return `<section class="card frase ${anelHtml ? 'com-anel' : ''}">${anelHtml}<div class="frase-corpo">
     <p class="eyebrow" style="color:inherit;opacity:.7">Pra você, agora</p>
     <blockquote class="fade-swap" id="frase-txt">${esc(f.t)}</blockquote>
     <div class="meta"><span>${esc(CATEGORIAS[f.cat] || 'Minhas frases')}</span>
       <span class="acts"><button class="round ${fav ? 'fav' : ''}" data-act="fav" data-id="${f.id}" aria-label="Favoritar">${fav ? '♥' : '♡'}</button>
       <button class="round" data-act="outra-frase" aria-label="Outra frase">↻</button></span></div>
-  </section>`;
+  </div></section>`;
 }
 
 // ---------- Componentes ----------
@@ -52,26 +54,55 @@ function anel(p, tam = 118) {
     <div class="txt"><div><b>${p.ok}/${p.total}</b><span>feitos</span></div></div></div>`;
 }
 
-function linhaDoTempo(itens) {
+const FONTE_NOME = { trabalho: 'Trabalho', pessoal: 'Pessoal', faculdade: 'Faculdade' };
+function linkBtn(e, sm = true) {
+  return e.link ? `<a class="btn rose ${sm ? 'sm' : ''} entrar" href="${esc(e.link)}" target="_blank" rel="noopener">Entrar ↗</a>` : '';
+}
+function evHtml(e, idx = 0) {
+  return `<li class="ti ev f-${e.fonte}" style="animation-delay:${idx * 45}ms"><time>${e.hora}</time><span class="evm" aria-hidden="true"></span>
+    <div class="body"><div class="t">${esc(e.titulo)}</div><div class="sub"><span class="pill src">${FONTE_NOME[e.fonte] || e.fonte}</span><span>até ${e.horaFim}${e.local && !/^https?:/.test(e.local) ? ' · ' + esc(e.local) : ''}</span>${linkBtn(e)}${e.doApp ? `<button class="x" data-act="del-comp" data-id="${e.appId}" title="Apagar compromisso">×</button>` : ''}</div></div></li>`;
+}
+function linhaDoTempo(dia) {
   const agora = new Date();
   const am = agoraMin(agora);
-  let html = '', marcou = false;
+  const itens = dia.itens;
   const prox = itens.find(i => !i.feito && !i.opcional && minutos(i.hora) + 30 >= am);
-  itens.forEach((it, idx) => {
-    if (!marcou && minutos(it.hora) > am) {
-      html += `<li class="now-line" aria-hidden="true"><time>${String(agora.getHours()).padStart(2, '0')}:${String(agora.getMinutes()).padStart(2, '0')}</time><i></i><span></span></li>`;
-      marcou = true;
-    }
+  const todos = [...itens.map(i => ({ k: 'i', h: minutos(i.hora), v: i })), ...dia.comHora.map(e => ({ k: 'e', h: minutos(e.hora), v: e }))].sort((a, b) => a.h - b.h || (a.k === 'e' ? -1 : 1));
+  let html = dia.diaTodo.length ? `<li class="allday">${dia.diaTodo.map(e => `<span class="pill f-${e.fonte}"><span class="dot"></span>${esc(e.titulo)}</span>`).join('')}</li>` : '';
+  let marcou = false;
+  todos.forEach(({ k, h, v: it }, idx) => {
+    if (!marcou && h > am) { html += `<li class="now-line" aria-hidden="true"><time>${String(agora.getHours()).padStart(2, '0')}:${String(agora.getMinutes()).padStart(2, '0')}</time><i></i><span></span></li>`; marcou = true; }
+    if (k === 'e') { html += evHtml(it, idx); return; }
     html += `<li class="ti ${it.feito ? 'feito' : ''} ${prox === it ? 'agora' : ''} a-${it.area}" style="animation-delay:${idx * 45}ms">
       <time>${it.hora}</time>
       <input type="checkbox" class="chk" data-check="${it.data}|${it.id}" ${it.feito ? 'checked' : ''} aria-label="${esc(it.titulo)}">
       <div class="body"><div class="t">${it.link ? `<a href="${it.link}" style="text-decoration:none">${esc(it.titulo)}</a>` : esc(it.titulo)}</div>
-        ${(it.sub || it.tag || it.opcional) ? `<div class="sub">${it.tag ? `<span class="pill rose">${esc(it.tag)}</span>` : ''}${it.sub ? `<span>${esc(it.sub)}</span>` : ''}${it.opcional && !it.feito ? `<button class="x" data-act="pular" data-d="${it.data}" data-id="${it.id}" title="Deixar pra lá">deixar pra lá ×</button>` : ''}</div>` : ''}
+        ${(it.sub || it.tag || it.opcional || it.conflito) ? `<div class="sub">${it.tag ? `<span class="pill rose">${esc(it.tag)}</span>` : ''}${it.conflito ? `<span class="pill rose">choca com ${esc(it.conflito)}</span>` : ''}${it.sub ? `<span>${esc(it.sub)}</span>` : ''}${it.opcional && !it.feito ? `<button class="x" data-act="pular" data-d="${it.data}" data-id="${it.id}" title="Deixar pra lá">deixar pra lá ×</button>` : ''}</div>` : ''}
       </div></li>`;
   });
   if (!marcou) html += `<li class="now-line" aria-hidden="true"><time>agora</time><i></i><span></span></li>`;
   return `<ol class="timeline">${html}</ol>`;
 }
+
+function cardAgenda(dia) {
+  const agora = Date.now();
+  const e = dia.comHora.find(e => e.fim > agora && e.ini - agora < 60 * 60000);
+  if (!e) return '';
+  const min = Math.round((e.ini - agora) / 60000);
+  return `<section class="card agora-ev f-${e.fonte}"><div style="min-width:0;flex:1"><p class="eyebrow">${min <= 0 ? 'Acontecendo agora' : `Em ${min} min`} · ${FONTE_NOME[e.fonte]}</p>
+    <div class="big">${esc(e.titulo)}</div><p class="muted" style="margin:4px 0 0;font-size:14px">${e.hora}–${e.horaFim}</p></div>${linkBtn(e, false)}</section>`;
+}
+
+function cardConvergencia(dia) {
+  const amanha = montarDia(addDias(new Date(), 1));
+  const linhas = [];
+  if (dia.horasReuniao >= 4) linhas.push(`<li>📅 <b>Dia cheio:</b> ${fmtH(dia.horasReuniao)} de compromissos. Foque no essencial e nas 3 prioridades.</li>`);
+  for (const m of dia.mudancas) linhas.push(`<li>↪ <b>${esc(m.titulo)}</b> foi de ${m.de} pra <b>${m.para}</b> por causa de “${esc(m.motivo)}”.</li>`);
+  if (amanha.horasReuniao >= 4) linhas.push(`<li>🔭 <b>Amanhã</b> tem ${fmtH(amanha.horasReuniao)} de compromissos. Que tal adiantar algo hoje?</li>`);
+  if (!linhas.length) return '';
+  return `<section class="card line conv"><h2>Convergências <small>eu reorganizei pra você</small></h2><ul class="note" style="margin:0;padding-left:0;list-style:none;display:flex;flex-direction:column;gap:8px">${linhas.join('')}</ul></section>`;
+}
+const fmtH = h => { const m = Math.round(h * 60); return m >= 60 ? `${Math.floor(m / 60)}h${m % 60 ? String(m % 60).padStart(2, '0') : ''}` : `${m} min`; };
 
 function cardProximo(itens, p) {
   const am = agoraMin();
@@ -107,16 +138,18 @@ function cardCaixa() {
 // ---------- Telas ----------
 function telaHoje() {
   const d = new Date(), data = ymd(d);
-  const itens = itensDoDia(d);
+  const dia = montarDia(d), itens = dia.itens;
   const top = S.get('top3:' + data, []);
   const p = progresso(itens, top);
   const bebe = S.get('config', {}).bebe;
   return `<div class="view">
-    <div class="hero"><div><p class="eyebrow">${dataLonga(d)}</p><h1>${saudacao(d)},<br><em>${esc(NOME)}.</em></h1></div>
-      <div class="hero-side">${bebe ? '<span class="bebe-badge">👶 Modo Bebê</span>' : ''}${anel(p)}</div></div>
+    <div class="grid hoje-top">
+      <div class="c-7 saud"><p class="eyebrow">${dataLonga(d)}${bebe ? ' · <span class="bebe-badge">👶 Modo Bebê</span>' : ''}</p><h1>${saudacao(d)}, <em>${esc(NOME)}.</em></h1></div>
+      <div class="c-5">${cardFrase(fraseExtra, anel(p, 112))}</div>
+    </div>
     <div class="grid">
-      <div class="c-7 stack">${cardProximo(itens, p)}<section class="card"><h2>Seu dia <small>${itens.filter(i => i.feito).length} de ${itens.length}</small></h2>${linhaDoTempo(itens)}</section></div>
-      <div class="c-5 stack">${cardFrase()}${cardTop3(data)}${cardCaixa()}</div>
+      <div class="c-7 stack">${cardAgenda(dia)}${cardProximo(itens, p)}${cardConvergencia(dia)}<section class="card"><h2>Seu dia <span class="row"><small>${itens.filter(i => i.feito).length} de ${itens.length} tarefas</small><button class="btn ghost sm" data-act="novo-comp">+ Compromisso</button></span></h2>${linhaDoTempo(dia)}</section></div>
+      <div class="c-5 stack">${cardTop3(data)}${cardCaixa()}</div>
     </div></div>`;
 }
 
@@ -151,6 +184,8 @@ function telaCasa() {
         <p>🍽 <b>Louça</b> dia sim, dia não: seg, qua e sex.</p>
         <p>🧺 <b>Roupa</b> nos dias sem louça: ter e qui.</p>
         <p>🧹 <b>Chão</b> qua e sex — casa limpa antes do fim de semana.</p>
+        <p>🐾 <b>Área dos cachorros</b> junto com a roupa: ter e qui.</p>
+        <p>🚿 <b>Garagem</b> toda sexta, na hora do almoço.</p>
         <p>✓ <b>Cozinha e escritório</b> todo dia útil às 18h30, antes do jantar.</p>
         <p>Se algo ficar pra trás, aparece no dia seguinte como <b>opcional</b>. Nada fica vermelho. Dá pra “deixar pra lá” sem culpa.</p>
       </div></section>
@@ -242,31 +277,124 @@ function telaAjustes() {
           <li><b>iPhone/iPad:</b> toque no arquivo baixado → Adicionar todos → escolha a agenda pessoal.</li>
           <li><b>Google Agenda (computador):</b> Configurações → Importar e exportar → Importar → escolha a agenda pessoal. O Google usa o alerta padrão da agenda; deixe em “no horário do evento”.</li></ol></details>
         <div class="set"><div><b>Avisos com o app aberto</b><p>Notifica no horário de cada tarefa enquanto o site estiver aberto.</p></div><button class="btn ghost sm" data-act="notif">${'Notification' in window && Notification.permission === 'granted' ? 'Ativados ✓' : 'Ativar'}</button></div></section>
+      ${cardAgendas()}
       <section class="card c-12"><h2>Conta e sincronização</h2>${contaHtml}</section>
     </div></div>`;
 }
 
 function telaGeladeira() {
   const d = new Date(), data = ymd(d);
-  const itens = itensDoDia(d);
+  const dia = montarDia(d), itens = dia.itens;
   const p = progresso(itens, S.get('top3:' + data, []));
   const compras = S.get('compras', []).filter(c => !c.feito);
   return `<div class="fr view">
     <a class="round fr-exit" href="#hoje" aria-label="Sair do Modo Geladeira">×</a>
     <div class="fr-left">
       <div style="display:flex;justify-content:space-between;align-items:flex-end;gap:16px;flex-wrap:wrap"><div><div class="fr-clock" id="fr-clock">--:--</div><div class="fr-date">${dataLonga(d)}</div></div>${anel(p, 130)}</div>
+      ${cardAgenda(dia)}
       ${cardFrase()}
       ${cardProximo(itens, p)}
       <section class="card"><h2>Compras <small>${compras.length}</small></h2>
         <form class="add" data-form="compras"><input name="t" placeholder="Acabou o quê?" autocomplete="off" data-k="fr-compras"><button class="btn">+</button></form>
         <ul class="list">${compras.slice(0, 8).map(c => `<li class="li"><input type="checkbox" class="chk" data-compra="${c.id}"><span class="t">${esc(c.t)}</span></li>`).join('') || '<li class="empty">Nada faltando.</li>'}</ul></section>
     </div>
-    <section class="card"><h2>Hoje</h2>${linhaDoTempo(itens)}</section>
+    <section class="card"><h2>Hoje</h2>${linhaDoTempo(dia)}</section>
     <div class="fr-dim" id="fr-dim"></div>
   </div>`;
 }
 
-const TELAS = { hoje: telaHoje, casa: telaCasa, devocional: telaDevocional, frases: telaFrases, ajustes: telaAjustes, geladeira: telaGeladeira };
+
+function telaFaculdade() {
+  const plano = planoTcc();
+  const feitos = plano.filter(b => S.get('checks:' + b.data, {})[b.id]).length;
+  const agora = new Date();
+  const aulas = [0, 1, 2, 3, 4, 5, 6].flatMap(i => A.doDia(addDias(agora, i)).filter(e => e.fonte === 'faculdade' || /aula|tcc|faculdade|orienta/i.test(e.titulo)).map(e => ({ ...e, d: addDias(agora, i) })));
+  const temLinks = (() => { const l = S.get('agendas', {}); return l.pessoal || l.trabalho; })();
+  return `<div class="view">
+    <div class="hero"><div><p class="eyebrow">EAD · reta final</p><h1>Faculdade <em>& TCC.</em></h1></div><div class="hero-side">${anel({ ok: feitos, total: TCC_BLOCOS, pct: feitos / TCC_BLOCOS })}</div></div>
+    <div class="grid">
+      <div class="c-7 stack">
+        <section class="card"><h2>Blocos da semana <small>${feitos}h de ${TCC_BLOCOS}h</small></h2>
+          ${plano.length ? `<ul class="list">${plano.map(b => { const d = deYmd(b.data); const ok = !!S.get('checks:' + b.data, {})[b.id]; return `<li class="li ${ok ? 'feito' : ''}">
+            <input type="checkbox" class="chk" data-check="${b.data}|${b.id}" ${ok ? 'checked' : ''} aria-label="Bloco de TCC">
+            <span class="t"><b>${DIAS[d.getDay()]}</b>, ${b.hora}–${String(+b.hora.slice(0, 2) + 1).padStart(2, '0')}:00${b.remarcado ? `<br><small class="muted">${esc(b.remarcado)}</small>` : ''}</span>
+            ${ok ? '' : `<button class="btn ghost sm" data-act="remarcar-tcc" data-id="${b.id}">Remarcar</button>`}</li>`; }).join('')}</ul>`
+          : `<p class="empty">${temLinks && !A.cache().quando ? 'Carregando suas agendas pra achar os horários livres…' : 'Os blocos da semana aparecem aqui.'}</p>`}
+          <p class="note" style="margin:12px 0 0">Eu encaixo 4 blocos de 1h nos horários livres (fora de reuniões e do almoço). Se aparecer uma reunião em cima ou um bloco ficar pra trás, eu remarco sozinha — sem culpa.</p></section>
+        <section class="card line"><h2>Próximo passo do TCC</h2><p class="note" style="margin-top:0">Escreva a próxima ação bem pequena e concreta. Fica muito mais fácil começar.</p>
+          <input class="campo" data-campo="tcc:proximo" data-k="tcc-prox" value="${esc(S.get('tcc:proximo', ''))}" placeholder="Ex.: reler o resumo do artigo 3 e anotar 3 ideias"></section>
+        <section class="card"><h2>Aulas e compromissos <small>próximos 7 dias</small></h2>
+          ${aulas.length ? `<ol class="timeline">${aulas.map((e, i) => evHtml({ ...e, hora: `${DIAS_CURTO[e.d.getDay()]} ${e.hora}` }, i)).join('')}</ol>` : '<p class="empty">Nenhuma aula na agenda. Use “+ Compromisso” → Faculdade para adicionar.</p>'}
+          <div class="row" style="margin-top:10px"><button class="btn ghost sm" data-act="novo-comp" data-fonte="faculdade">+ Compromisso da faculdade</button></div></section>
+      </div>
+      <div class="c-5 stack">
+        <section class="card line"><h2>Pomodoro <small>25 + 5</small></h2>
+          <div class="timer"><div class="clock" id="p-clock">25:00</div><div class="row"><button class="btn rose" data-act="pomo">Começar</button><button class="btn ghost sm" data-act="pomo-zerar">Zerar</button></div></div>
+          <div class="bar"><i id="p-bar" style="width:0"></i></div><p class="note" id="p-fase" style="margin:6px 0 0">Foco: 25 min. Celular longe, só uma aba aberta.</p></section>
+        ${cardFrase()}
+      </div>
+    </div></div>`;
+}
+
+function telaTrabalho() {
+  const hoje = new Date();
+  const seg = segunda(hoje);
+  const trab = d => A.doDia(d).filter(e => e.fonte === 'trabalho');
+  const semana = [0, 1, 2, 3, 4].map(i => { const d = addDias(seg, i); const h = trab(d).filter(e => !e.diaTodo).reduce((s, e) => s + (e.fim - e.ini) / 3600000, 0); return { d, h }; });
+  const max = Math.max(4, ...semana.map(x => x.h));
+  const tarefas = S.get('trabalho:tarefas', []);
+  const lista = d => { const evs = trab(d); return evs.length ? `<ol class="timeline">${evs.map((e, i) => e.diaTodo ? `<li class="allday"><span class="pill f-trabalho"><span class="dot"></span>${esc(e.titulo)}</span></li>` : evHtml(e, i)).join('')}</ol>` : '<p class="empty">Sem reuniões.</p>'; };
+  return `<div class="view">
+    <div class="hero"><div><p class="eyebrow">Tutory · 9h às 18h</p><h1>Trabalho <em>leve.</em></h1></div></div>
+    <div class="grid">
+      <div class="c-7 stack">
+        <section class="card"><h2>Hoje <button class="btn ghost sm" data-act="novo-comp" data-fonte="trabalho">+ Compromisso</button></h2>${lista(hoje)}</section>
+        <section class="card line"><h2>Amanhã <small>${dataLonga(addDias(hoje, 1))}</small></h2>${lista(addDias(hoje, 1))}</section>
+      </div>
+      <div class="c-5 stack">
+        <section class="card"><h2>Semana <small>horas de reunião</small></h2><div class="carga">
+          ${semana.map(({ d, h }) => `<div class="cg ${ymd(d) === ymd(hoje) ? 'hoje' : ''} ${h >= 5 ? 'cheio' : ''}"><span>${DIAS_CURTO[d.getDay()]}</span><div class="cg-bar"><i style="height:${Math.round(h / max * 100)}%"></i></div><b>${fmtH(h) || '0'}</b></div>`).join('')}
+          </div><p class="note" style="margin:10px 0 0">Dias com 5h ou mais de reunião ficam em rosé: neles eu tiro os blocos de TCC e deixo só o essencial.</p></section>
+        <section class="card line"><h2>Tarefas do trabalho <small>${tarefas.filter(t => !t.feito).length}</small></h2>
+          <form class="add" data-form="trabalho"><input name="t" placeholder="Ex.: follow-up com lead X" autocomplete="off" data-k="trab-in"><button class="btn">+</button></form>
+          <ul class="list">${tarefas.length ? tarefas.map(t => `<li class="li ${t.feito ? 'feito' : ''}"><input type="checkbox" class="chk" data-trab="${t.id}" ${t.feito ? 'checked' : ''}><span class="t">${esc(t.t)}</span>
+            ${t.feito ? '' : `<button class="btn ghost sm" data-act="trab-hoje" data-id="${t.id}" title="Virar prioridade de hoje">↑ hoje</button>`}<button class="x" data-act="del-trab" data-id="${t.id}">×</button></li>`).join('') : '<li class="empty">Nada pendente.</li>'}</ul>
+          ${tarefas.some(t => t.feito) ? '<button class="btn ghost sm" style="margin-top:10px" data-act="limpar-trab">Limpar feitas</button>' : ''}</section>
+      </div>
+    </div></div>`;
+}
+
+function cardAgendas() {
+  const l = S.get('agendas', {});
+  const c = A.cache();
+  const linha = (k, nome) => `<div class="set"><div><b><span class="dotc f-${k}"></span>${nome}</b><p>${l[k] ? (c.erros?.[k] ? '⚠️ ' + esc(c.erros[k]) : 'Conectada ✓') : 'Cole o endereço secreto iCal desta agenda.'}</p></div>
+    ${l[k] ? `<button class="btn ghost sm" data-act="del-agenda" data-k="${k}">Remover</button>` : `<form class="add" data-form="agenda" data-k="${k}" style="margin:0;flex:1;max-width:340px"><input name="t" type="password" placeholder="https://calendar.google.com/…/basic.ics" autocomplete="off"><button class="btn sm">Salvar</button></form>`}</div>`;
+  return `<section class="card c-12"><h2>Agendas <small>${c.quando ? 'atualizado às ' + new Date(c.quando).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : ''}</small></h2>
+    ${!S.conta() ? '<div class="banner">Entre na sua conta (abaixo) para conectar as agendas.</div>' : ''}
+    ${linha('pessoal', 'Pessoal')}${linha('trabalho', 'Trabalho (Tutory)')}
+    ${c.erros?.geral ? `<p class="note">⚠️ ${esc(c.erros.geral)}</p>` : ''}
+    <div class="row" style="margin-top:12px"><button class="btn ghost sm" data-act="atualizar-agenda">Atualizar agora</button></div>
+    <p class="note">Os links ficam guardados só na sua conta. As agendas são lidas a cada 30 min e quando você abre o app.</p></section>`;
+}
+
+function dialogoCompromisso(fonte = 'trabalho') {
+  const d = new Date(); const h = String(Math.min(22, d.getHours() + 1)).padStart(2, '0');
+  let dlg = document.getElementById('dlg-comp');
+  if (!dlg) { dlg = document.createElement('dialog'); dlg.id = 'dlg-comp'; document.body.appendChild(dlg); }
+  dlg.innerHTML = `<form class="form" data-form="comp" method="dialog">
+    <h2 class="serif" style="font-size:28px;margin:0 0 4px">Novo compromisso</h2>
+    <input name="titulo" placeholder="O quê? (reunião, aula, consulta…)" required autocomplete="off">
+    <div class="chips" style="margin:0">${Object.entries(A.FONTES_APP).map(([k, v]) => `<label class="chip f-${k}"><input type="radio" name="fonte" value="${k}" ${k === fonte ? 'checked' : ''} class="sr"><span class="dotc"></span>${v}</label>`).join('')}</div>
+    <div class="row"><input type="date" name="data" value="${ymd(d)}" required style="flex:1.4"><input type="time" name="ini" value="${h}:00" required style="flex:1"><input type="time" name="fim" value="${h}:30" style="flex:1"></div>
+    <input name="link" type="url" placeholder="Link da reunião/aula (opcional)" autocomplete="off">
+    <label class="row note" style="cursor:pointer"><input type="checkbox" name="semanal" class="chk"> Repete toda semana</label>
+    <div class="row" style="justify-content:flex-end;margin-top:6px"><button class="btn ghost" value="cancelar" formnovalidate>Cancelar</button><button class="btn" value="salvar">Salvar</button></div>
+  </form>`;
+  dlg.showModal();
+  dlg.querySelector('[name="titulo"]').focus();
+}
+
+const TELAS = { hoje: telaHoje, casa: telaCasa, faculdade: telaFaculdade, trabalho: telaTrabalho, devocional: telaDevocional, frases: telaFrases, ajustes: telaAjustes, geladeira: telaGeladeira };
 
 // ---------- Render ----------
 function render(anima = false) {
@@ -286,6 +414,7 @@ function render(anima = false) {
     if (anima) $('.dbtn.sel')?.scrollIntoView({ inline: 'center', block: 'nearest' }); else if (dias && scroll != null) dias.scrollLeft = scroll;
     pintarTimer();
   }
+  if (rota === 'faculdade') pintarPomo();
   if (rota === 'geladeira') relogio();
 }
 
@@ -301,14 +430,14 @@ function navegar() {
 
 // ---------- Ações ----------
 function toggleCheck(data, id, marcado, el) {
-  const antes = progresso(itensDoDia(new Date()), S.get('top3:' + hojeStr(), []));
+  const antes = progresso(montarDia().itens, S.get('top3:' + hojeStr(), []));
   S.update('checks:' + data, {}, ch => { if (marcado) ch[id] = Date.now(); else delete ch[id]; });
   if (id === 'devocional') S.update('devo:' + data, null, v => marcado ? (v || (S.get('config', {}).bebe ? 'curto' : 'completo')) : null);
   if (marcado) celebrar(el, antes);
 }
 
 function celebrar(el, antes) {
-  const depois = progresso(itensDoDia(new Date()), S.get('top3:' + hojeStr(), []));
+  const depois = progresso(montarDia().itens, S.get('top3:' + hojeStr(), []));
   if (el) confeteEm(el, 22);
   if (depois.total && depois.ok === depois.total && antes.ok < antes.total) { setTimeout(festa, 250); toast(sortear(DIA_COMPLETO), 4200); }
   else toast(sortear(AO_MARCAR));
@@ -318,10 +447,11 @@ app.addEventListener('change', e => {
   const t = e.target;
   if (t.dataset.check) { const [d, id] = t.dataset.check.split('|'); toggleCheck(d, id, t.checked, t); }
   else if (t.dataset.topchk) {
-    const antes = progresso(itensDoDia(new Date()), S.get('top3:' + hojeStr(), []));
+    const antes = progresso(montarDia().itens, S.get('top3:' + hojeStr(), []));
     S.update('top3:' + hojeStr(), () => [{ t: '' }, { t: '' }, { t: '' }], top => { top[+t.dataset.topchk].feito = t.checked; });
     if (t.checked) celebrar(t, antes);
   }
+  else if (t.dataset.trab) { S.update('trabalho:tarefas', [], l => { const c = l.find(x => x.id === t.dataset.trab); if (c) c.feito = t.checked; }); if (t.checked) { confeteEm(t, 14); toast(sortear(AO_MARCAR)); } }
   else if (t.dataset.compra) { S.update('compras', [], l => { const c = l.find(x => x.id === t.dataset.compra); if (c) c.feito = t.checked; }); if (t.checked) { confeteEm(t, 12); toast('Comprado! ✓'); } }
   else if (t.dataset.act === 'bebe') { S.update('config', {}, c => { c.bebe = t.checked; }); toast(t.checked ? 'Modo Bebê ligado. Só o essencial agora. 🤍' : 'Modo Bebê desligado. Rotina completa de volta.'); }
 });
@@ -331,6 +461,7 @@ app.addEventListener('input', e => {
   calado = true;
   if (t.dataset.top != null) S.update('top3:' + hojeStr(), () => [{ t: '' }, { t: '' }, { t: '' }], top => { top[+t.dataset.top].t = t.value; if (!t.value) top[+t.dataset.top].feito = false; });
   else if (t.dataset.diario) S.set('diario:' + t.dataset.diario, t.value);
+  else if (t.dataset.campo) S.set(t.dataset.campo, t.value);
   calado = false;
   if (t.dataset.top != null) { const c = t.parentElement.querySelector('[data-topchk]'); if (c) c.disabled = !t.value; }
 });
@@ -340,6 +471,11 @@ app.addEventListener('submit', async e => {
   const f = e.target, tipo = f.dataset.form;
   const v = f.t?.value?.trim();
   if (tipo === 'caixa' && v) { S.update('caixa', [], l => { l.unshift({ id: uid(), t: v }); }); toast('Anotado. Pode esquecer, eu lembro. 🧠'); }
+  if (tipo === 'trabalho' && v) { S.update('trabalho:tarefas', [], l => { l.unshift({ id: uid(), t: v }); }); }
+  if (tipo === 'agenda' && v) {
+    if (!/^(https|webcal):\/\/.*google/i.test(v)) { toast('Esse não parece o endereço secreto iCal do Google.', 4000); return; }
+    S.update('agendas', {}, l => { l[f.dataset.k] = v; }); toast('Agenda salva. Carregando…'); setTimeout(recarregarAgenda, 1500); return;
+  }
   if (tipo === 'compras' && v) { S.update('compras', [], l => { l.unshift({ id: uid(), t: v }); }); }
   if (tipo === 'frase' && v) { S.update('afirmacoes', { favs: [], minhas: [] }, a => { a.minhas = a.minhas || []; a.minhas.unshift({ id: 'm-' + uid(), t: v }); }); toast('Frase salva. 🤍'); }
   if (tipo === 'login') {
@@ -352,6 +488,15 @@ app.addEventListener('submit', async e => {
     return;
   }
   const inp = f.querySelector('input[name="t"]'); if (inp) { inp.value = ''; inp.focus(); }
+});
+
+document.addEventListener('submit', e => {
+  const f = e.target; if (f.dataset.form !== 'comp') return;
+  if (e.submitter?.value !== 'salvar') return;
+  const c = { id: uid(), titulo: f.titulo.value.trim(), fonte: f.fonte.value, data: f.data.value, ini: f.ini.value, fim: f.fim.value && f.fim.value > f.ini.value ? f.fim.value : f.ini.value, link: f.link.value.trim() || null, semanal: f.semanal.checked };
+  if (!c.titulo || !c.data || !c.ini) return;
+  S.update('compromissos', [], l => { l.push(c); });
+  toast('Compromisso salvo. Eu reorganizo o resto em volta. ✨');
 });
 
 document.addEventListener('click', e => {
@@ -376,7 +521,7 @@ document.addEventListener('click', e => {
     case 'devo-dia': devoSel = b.dataset.d; render(); $('.dbtn.sel')?.scrollIntoView({ inline: 'center', block: 'nearest', behavior: 'smooth' }); break;
     case 'devo-ok': {
       S.set('devo:' + devoSel, b.dataset.v);
-      const antes = progresso(itensDoDia(new Date()), S.get('top3:' + hojeStr(), []));
+      const antes = progresso(montarDia().itens, S.get('top3:' + hojeStr(), []));
       S.update('checks:' + devoSel, {}, ch => { ch.devocional = Date.now(); });
       if (devoSel === hojeStr()) celebrar(b, antes); else { confeteEm(b, 22); toast('Marcado. 🤍'); }
       break;
@@ -388,6 +533,20 @@ document.addEventListener('click', e => {
     case 'del-frase': S.update('afirmacoes', { favs: [], minhas: [] }, af => { af.minhas = (af.minhas || []).filter(m => m.id !== id); }); break;
     case 'tema': aplicarTema(b.dataset.t); render(); break;
     case 'sair': S.sair().then(() => render()); break;
+    case 'novo-comp': dialogoCompromisso(b.dataset.fonte); break;
+    case 'del-comp': if (confirm('Apagar este compromisso?')) S.update('compromissos', [], l => l.filter(c => c.id !== id)); break;
+    case 'remarcar-tcc': { const r = remarcarTcc(id); toast(r ? `Bloco remarcado pra ${DIAS[deYmd(r.data).getDay()].toLowerCase()}, ${r.hora}.` : 'Não achei outro horário livre esta semana.'); break; }
+    case 'del-trab': S.update('trabalho:tarefas', [], l => l.filter(x => x.id !== id)); break;
+    case 'limpar-trab': S.update('trabalho:tarefas', [], l => l.filter(x => !x.feito)); break;
+    case 'trab-hoje': {
+      const item = S.get('trabalho:tarefas', []).find(x => x.id === id); if (!item) break; let ok = false;
+      S.update('top3:' + hojeStr(), () => [{ t: '' }, { t: '' }, { t: '' }], top => { const i = top.findIndex(p => !p.t?.trim()); if (i >= 0) { top[i] = { t: item.t }; ok = true; } });
+      toast(ok ? 'Virou prioridade de hoje.' : 'As 3 prioridades já estão cheias. 🙂'); break;
+    }
+    case 'del-agenda': S.update('agendas', {}, l => { delete l[b.dataset.k]; }); setTimeout(recarregarAgenda, 1500); break;
+    case 'atualizar-agenda': recarregarAgenda(true); break;
+    case 'pomo': alternarPomo(); break;
+    case 'pomo-zerar': pomo = { acum: 0, inicio: null, fase: 'foco' }; pintarPomo(); break;
     case 'notif': if ('Notification' in window) Notification.requestPermission().then(() => render()); else toast('Este navegador não suporta notificações.'); break;
   }
 });
@@ -428,6 +587,37 @@ function pintarTimer() {
 }
 setInterval(() => { if (timer.inicio) pintarTimer(); }, 1000);
 
+// ---------- Pomodoro ----------
+let pomo = { acum: 0, inicio: null, fase: 'foco' };
+const POMO = { foco: 25 * 60, pausa: 5 * 60 };
+const pomoDec = () => Math.min(POMO[pomo.fase], pomo.acum + (pomo.inicio ? (Date.now() - pomo.inicio) / 1000 : 0));
+function alternarPomo() { if (pomo.inicio) { pomo.acum = pomoDec(); pomo.inicio = null; } else pomo.inicio = Date.now(); pintarPomo(); }
+function pintarPomo() {
+  const s = pomoDec(), tot = POMO[pomo.fase];
+  if (pomo.inicio && s >= tot) {
+    const era = pomo.fase; pomo = { acum: 0, inicio: Date.now(), fase: era === 'foco' ? 'pausa' : 'foco' };
+    toast(era === 'foco' ? 'Pomodoro feito! 5 min de pausa: água, alongar. 🍅' : 'Pausa acabou. Mais 25 min de foco?', 5000);
+    if (era === 'foco') festa();
+    return pintarPomo();
+  }
+  const el = $('#p-clock'); if (!el) return;
+  const r = Math.ceil(tot - s);
+  el.textContent = `${String(Math.floor(r / 60)).padStart(2, '0')}:${String(r % 60).padStart(2, '0')}`;
+  $('#p-bar').style.width = (s / tot * 100) + '%';
+  $('#p-fase').textContent = pomo.fase === 'foco' ? 'Foco: 25 min. Celular longe, só uma aba aberta.' : 'Pausa: levanta, bebe água, respira.';
+  const btn = $('[data-act="pomo"]'); if (btn) btn.textContent = pomo.inicio ? 'Pausar' : (s > 0 ? 'Continuar' : 'Começar');
+}
+setInterval(() => { if (pomo.inicio) pintarPomo(); }, 1000);
+
+// ---------- Agendas ----------
+async function recarregarAgenda(manual = false) {
+  try { await A.atualizar(); if (manual) toast('Agendas atualizadas. 📅'); }
+  catch (e) { console.warn(e); const c = A.cache(); c.erros = { ...(c.erros || {}), geral: 'Não consegui ler as agendas. Confira se a função “agenda” foi criada no Supabase.' }; S.local('agenda-cache', JSON.stringify(c)); if (manual) toast('Não consegui atualizar as agendas.', 4000); }
+  const digitando = document.activeElement && /INPUT|TEXTAREA/.test(document.activeElement.tagName) && document.activeElement.type !== 'checkbox';
+  if (!digitando) render();
+}
+setInterval(recarregarAgenda, 30 * 60000);
+
 // ---------- Geladeira ----------
 let wake = null, frTimers = [];
 function relogio() {
@@ -455,7 +645,7 @@ const avisados = new Set();
 let ultimoDia = hojeStr(), ultimaHora = new Date().getHours();
 setInterval(() => {
   const d = new Date(), am = agoraMin(d);
-  for (const it of itensDoDia(d)) {
+  for (const it of montarDia(d).itens) {
     const chave = it.data + it.id + it.hora;
     if (!it.feito && minutos(it.hora) === am && !avisados.has(chave)) {
       avisados.add(chave);
@@ -483,5 +673,5 @@ S.onStatus((st) => {
 if (!S.get('inicio', null)) S.set('inicio', hojeStr());
 addEventListener('hashchange', navegar);
 navegar();
-S.iniciarNuvem();
+S.iniciarNuvem().then(() => recarregarAgenda());
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
