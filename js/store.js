@@ -129,8 +129,8 @@ export async function puxar() {
   if (!sb || !usuario) return;
   status('busy');
   const desde = Number(lsGet('_puxado') || 0);
-  // margem de 15 min: tolera relógios diferentes entre aparelhos e envios atrasados
-  const { data, error } = await sb.from('dados').select('chave,valor,atualizado').gt('atualizado', Math.max(0, desde - 15 * 60000));
+  // margem de 3 min: tolera relógios diferentes entre aparelhos e envios atrasados
+  const { data, error } = await sb.from('dados').select('chave,valor,atualizado').gt('atualizado', Math.max(0, desde - 3 * 60000));
   if (error) { console.warn('pull', error); ultimoErro = 'Leitura: ' + (error.message || error.code); status('erro'); return; }
   const mudou = [];
   let max = desde;
@@ -161,15 +161,23 @@ export async function iniciarNuvem() {
 // ---------- Tempo real: mudanças feitas em outro aparelho chegam na hora ----------
 let canal = null;
 export let tempoReal = 'desligado';
-function ligarTempoReal() {
+async function ligarTempoReal(privado = false) {
   if (!sb || !usuario) return;
+  try { const { data } = await sb.auth.getSession(); if (data.session) await sb.realtime.setAuth(data.session.access_token); } catch {}
   if (canal) sb.removeChannel(canal);
-  canal = sb.channel('dados-' + usuario.id)
+  canal = sb.channel('dados-' + usuario.id, { config: { private: privado } })
     .on('postgres_changes', { event: '*', schema: 'public', table: 'dados', filter: `user_id=eq.${usuario.id}` }, ({ new: row }) => {
       if (!row?.chave) return;
       if (receber(row.chave, row.valor, Number(row.atualizado))) avisar([row.chave]);
     })
-    .subscribe(st => { tempoReal = st === 'SUBSCRIBED' ? 'ligado' : st === 'CHANNEL_ERROR' || st === 'TIMED_OUT' ? 'indisponível' : tempoReal; status(estado); });
+    .subscribe((st, err) => {
+      if (st === 'SUBSCRIBED') tempoReal = 'ligado';
+      else if (st === 'CHANNEL_ERROR' || st === 'TIMED_OUT') {
+        if (!privado) { ligarTempoReal(true); return; } // projeto que só aceita canais privados
+        tempoReal = 'indisponível' + (err?.message ? ` (${err.message})` : '');
+      }
+      status(estado);
+    });
 }
 
 async function primeiraSync() {
