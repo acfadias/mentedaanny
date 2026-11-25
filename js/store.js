@@ -53,6 +53,38 @@ export function local(k, v) {
   lsSet(k, v);
 }
 
+// ---------- Mesclagem de checks ----------
+// Checks de aparelhos diferentes se somam (em vez de um substituir o outro).
+// Desmarcar guarda um "apagado em" em _x, para a remoção também valer nos outros aparelhos.
+const mesclavel = k => /^checks:/.test(k);
+export function mesclar(a = {}, b = {}) {
+  a = a || {}; b = b || {};
+  const x = { ...(a._x || {}) };
+  for (const [id, t] of Object.entries(b._x || {})) x[id] = Math.max(x[id] || 0, t);
+  const out = {};
+  for (const src of [a, b]) for (const [id, t] of Object.entries(src)) if (id !== '_x') out[id] = Math.max(Number(out[id]) || 0, Number(t) || 1);
+  for (const [id, t] of Object.entries(x)) if (out[id] != null && t >= out[id]) delete out[id];
+  if (Object.keys(x).length) out._x = x;
+  return out;
+}
+const igual = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+// Aplica um valor vindo da nuvem; devolve true se mudou algo aqui
+function receber(chave, valor, t) {
+  const loc = rec(chave);
+  if (mesclavel(chave) && loc && loc.v && valor) {
+    const m = mesclar(loc.v, valor);
+    if (igual(m, loc.v) && loc.t >= t) return false;
+    const novo = { v: m, t: Math.max(loc.t, t) };
+    mem.set(chave, novo); lsSet('d:' + chave, JSON.stringify(novo));
+    if (!igual(m, valor)) { novo.t = Date.now(); lsSet('d:' + chave, JSON.stringify(novo)); marcarPendente(chave); agendarEnvio(); }
+    return true;
+  }
+  if (loc && t <= loc.t) return false;
+  const r = { v: valor, t };
+  mem.set(chave, r); lsSet('d:' + chave, JSON.stringify(r));
+  return true;
+}
+
 // ---------- Sincronização ----------
 function pendentes() { try { return JSON.parse(lsGet('_pend') || '[]'); } catch { return []; } }
 function marcarPendente(k) { const p = new Set(pendentes()); p.add(k); lsSet('_pend', JSON.stringify([...p])); }
@@ -101,13 +133,7 @@ export async function puxar() {
   let max = desde;
   for (const row of data) {
     max = Math.max(max, Number(row.atualizado));
-    const loc = rec(row.chave);
-    if (!loc || Number(row.atualizado) > loc.t) {
-      const r = { v: row.valor, t: Number(row.atualizado) };
-      mem.set(row.chave, r);
-      lsSet('d:' + row.chave, JSON.stringify(r));
-      mudou.push(row.chave);
-    }
+    if (receber(row.chave, row.valor, Number(row.atualizado))) mudou.push(row.chave);
   }
   lsSet('_puxado', String(max));
   if (mudou.length) avisar(mudou);
@@ -138,11 +164,7 @@ function ligarTempoReal() {
   canal = sb.channel('dados-' + usuario.id)
     .on('postgres_changes', { event: '*', schema: 'public', table: 'dados', filter: `user_id=eq.${usuario.id}` }, ({ new: row }) => {
       if (!row?.chave) return;
-      const loc = rec(row.chave);
-      if (loc && loc.t >= Number(row.atualizado)) return; // a mudança é deste aparelho ou mais antiga
-      const r = { v: row.valor, t: Number(row.atualizado) };
-      mem.set(row.chave, r); lsSet('d:' + row.chave, JSON.stringify(r));
-      avisar([row.chave]);
+      if (receber(row.chave, row.valor, Number(row.atualizado))) avisar([row.chave]);
     })
     .subscribe(st => { tempoReal = st === 'SUBSCRIBED' ? 'ligado' : st === 'CHANNEL_ERROR' || st === 'TIMED_OUT' ? 'indisponível' : tempoReal; status(estado); });
 }

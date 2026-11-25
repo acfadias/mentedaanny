@@ -8,7 +8,7 @@ import * as A from './agenda.js';
 import * as F from './financas.js';
 import { montarDia, planoTcc, remarcarTcc, segunda, TCC_BLOCOS, janelaParaAdiantar, adiantarTcc, pendenciasSemana } from './dia.js';
 
-const VERSAO = '19'; // a mesma versão vai em version.json; o app se atualiza sozinho quando ela muda
+const VERSAO = '20'; // a mesma versão vai em version.json; o app se atualiza sozinho quando ela muda
 const $ = (s, el = document) => el.querySelector(s);
 const app = $('#app');
 const ICO_CORACAO = on => `<svg viewBox="0 0 24 24" width="16" height="16" fill="${on ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10z"/></svg>`;
@@ -778,7 +778,7 @@ function navegar() {
 function toggleCheck(data, id, marcado, el) {
   const antes = progresso(montarDia().contaveis, S.get('top3:' + hojeStr(), []));
   if (id.startsWith('conta:')) F.marcarPago(id.slice(6), marcado, data.slice(0, 7));
-  else S.update('checks:' + data, {}, ch => { if (marcado) ch[id] = Date.now(); else delete ch[id]; });
+  else S.update('checks:' + data, {}, ch => { ch._x ||= {}; if (marcado) { ch[id] = Date.now(); delete ch._x[id]; } else { delete ch[id]; ch._x[id] = Date.now(); } });
   if (id === 'devocional') S.update('devo:' + data, null, v => marcado ? (v || (S.get('config', {}).bebe ? 'curto' : 'completo')) : null);
   if (marcado) celebrar(el, antes);
 }
@@ -913,7 +913,7 @@ document.addEventListener('click', e => {
       if (devoSel === hojeStr()) celebrar(b, antes); else { confeteEm(b, 22); toast('Marcado.'); }
       break;
     }
-    case 'devo-desfazer': S.set('devo:' + devoSel, null); S.update('checks:' + devoSel, {}, ch => { delete ch.devocional; }); break;
+    case 'devo-desfazer': S.set('devo:' + devoSel, null); S.update('checks:' + devoSel, {}, ch => { delete ch.devocional; ch._x = { ...(ch._x || {}), devocional: Date.now() }; }); break;
     case 'timer': alternarTimer(); break;
     case 'timer-zerar': timer = { acum: 0, inicio: null }; pintarTimer(); break;
     case 'filtro': filtroFrases = b.dataset.f; render(true); break;
