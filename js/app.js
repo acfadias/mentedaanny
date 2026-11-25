@@ -22,7 +22,8 @@ let semanaOffset = 0;
 let finMes = null;            // mês aberto em Finanças
 let finEditar = false;
 let finAba = 'resumo';
-let finCat = '';        // 0 = esta semana
+let finCat = '';
+let finPessoa = '';        // 0 = esta semana
 let fraseExtra = 0;           // muda a frase quando ela toca em "outra"
 let calado = false;           // evita re-render enquanto ela digita
 
@@ -541,18 +542,20 @@ function telaFinancas() {
   const meses = Array.from({ length: 13 }, (_, i) => F.mesMais(finMes, i - 12)).filter(m => m >= F.PRIMEIRO);
   const tile = (rot, val, sub = '', cls = '') => `<div class="card fin-tile ${cls}"><p class="eyebrow">${rot}</p><b>${val}</b><span>${sub}</span></div>`;
   const bancoPill = b => `<span class="pill banco f-${F.corBanco(b)}">${esc(b)}</span>`;
+  const pessoaPill = x => `<span class="pill pessoa p-${F.pessoaDe(x)}">${F.PESSOAS[F.pessoaDe(x)]}</span>`;
   const linhas = contas.map(c => {
     const v = F.valorNoMes(f, c, finMes), pg = F.pago(f, finMes, c.id);
     const atras = ehAtual && !pg && c.dia && Number(c.dia) < diaHoje;
     if (finEditar) return `<li class="fin-row editar"><input class="mini" data-fin="conta|${c.id}|nome" value="${esc(c.nome)}" aria-label="Nome">
       <select class="mini" data-fin="conta|${c.id}|banco" aria-label="Banco">${f.bancos.map(b => `<option ${b === c.banco ? 'selected' : ''}>${esc(b)}</option>`).join('')}</select>
+      <select class="mini" data-fin="conta|${c.id}|pessoa" aria-label="De quem">${Object.entries(F.PESSOAS).map(([k, v]) => `<option value="${k}" ${F.pessoaDe(c) === k ? 'selected' : ''}>${v}</option>`).join('')}</select>
       <input class="mini n" data-fin="conta|${c.id}|dia" value="${c.dia ?? ''}" inputmode="numeric" placeholder="dia" aria-label="Dia do vencimento">
       <input class="mini n" data-fin="conta|${c.id}|valor" value="${c.valor ?? ''}" inputmode="decimal" aria-label="Valor previsto">
       <button class="x" data-act="del-conta" data-id="${c.id}" title="Excluir conta">×</button></li>`;
     return `<li class="fin-row f-${F.corBanco(c.banco)} ${pg ? 'feito' : ''} ${atras ? 'atrasada' : ''}">
       <input type="checkbox" class="chk" data-pago="${c.id}" ${pg ? 'checked' : ''} aria-label="Pago: ${esc(c.nome)}">
       <span class="fin-dia">${c.dia ? `dia ${c.dia}` : '—'}</span>
-      <span class="t"><b>${esc(c.nome)}</b>${bancoPill(c.banco)}${atras ? '<span class="pill rose">atrasada</span>' : ''}</span>
+      <span class="t"><b>${esc(c.nome)}</b>${bancoPill(c.banco)}${pessoaPill(c)}${atras ? '<span class="pill rose">atrasada</span>' : ''}</span>
       <label class="fin-val"><span class="sr">Valor em ${F.nomeMes(finMes)}</span><input class="mini n" data-fin="hist|${c.id}|${finMes}" value="${v ?? ''}" inputmode="decimal" placeholder="${c.valor}"></label></li>`;
   }).join('');
   const maxB = Math.max(1, ...Object.values(r.bancos).map(b => b.total));
@@ -570,6 +573,7 @@ function telaFinancas() {
     </div>
     <div class="grid" style="margin-top:clamp(14px,2vw,22px)">
       <section class="card c-12">${graficoDestino(P)}</section>
+      <section class="card c-12">${graficoPessoas(P)}</section>
       <section class="card c-7"><h2>Evolução <small>renda e gastos por mês</small></h2>${graficoEvolucao(f, finMes)}</section>
       <section class="card line c-5"><h2>Análise do mês</h2><ul class="analise">${F.analise(f, finMes).map(a => `<li class="an-${a.tom}"><span class="an-dot" aria-hidden="true"></span><span>${esc(a.txt)}</span></li>`).join('')}</ul></section>
       <section class="card c-6"><h2>Rendas de ${F.nomeMes(finMes)} <small>muda todo mês com a comissão</small></h2>
@@ -594,6 +598,7 @@ function telaFinancas() {
         <form class="fin-nova" data-form="conta-nova"><p class="eyebrow" style="margin:18px 0 8px">Nova conta</p>
           <div class="row"><input name="nome" class="mini" placeholder="Nome (ex.: Plano de saúde)" required style="flex:2;min-width:160px">
           <select name="banco" class="mini">${f.bancos.map(b => `<option>${esc(b)}</option>`).join('')}<option value="__novo">+ Outro banco…</option></select><input name="bancoNovo" class="mini banco-novo" placeholder="Nome do banco" hidden>
+          <select name="pessoa" class="mini" aria-label="De quem">${Object.entries(F.PESSOAS).map(([k, v]) => `<option value="${k}" ${k === 'casal' ? 'selected' : ''}>${v}</option>`).join('')}</select>
           <input name="dia" class="mini n" placeholder="dia" inputmode="numeric" style="width:70px">
           <input name="valor" class="mini n" placeholder="valor" inputmode="decimal" required style="width:100px">
           <button class="btn sm">Adicionar</button></div></form>
@@ -606,22 +611,24 @@ function telaFinancas() {
       </div>
     </div>`;
   } else if (finAba === 'extras') {
-    const lista = P.extras.filter(e => !finCat || (e.cat || 'Outros') === finCat);
+    const lista = P.extras.filter(e => (!finCat || (e.cat || 'Outros') === finCat) && (!finPessoa || F.pessoaDe(e) === finPessoa));
     const hoje = ymd(new Date());
     const dataPadrao = hoje.slice(0, 7) === finMes ? hoje : finMes + '-01';
     corpo = `<div class="grid">
       <section class="card c-7"><h2>Gastos extras de ${F.nomeMes(finMes)} <small>${F.brl(P.extrasTotal)}</small></h2>
         <form class="fin-nova extra-form" data-form="extra-novo">
           <div class="row"><input name="desc" class="mini" placeholder="O que foi? (ex.: farmácia)" required style="flex:2;min-width:170px"><input name="valor" class="mini n" placeholder="valor" inputmode="decimal" required style="width:100px"></div>
+          <div class="row"><div class="pessoa-esc" role="radiogroup" aria-label="De quem é o gasto">${Object.entries(F.PESSOAS).map(([k, v]) => `<label class="chip p-${k}"><input type="radio" name="pessoa" value="${k}" class="sr" ${k === (finPessoa || 'anny') ? 'checked' : ''}>${v}</label>`).join('')}</div></div>
           <div class="row"><select name="cat" class="mini">${F.CATEGORIAS.map(c => `<option>${c}</option>`).join('')}</select>
             <select name="forma" class="mini">${Object.entries(F.FORMAS).map(([k, v]) => `<option value="${k}">${v}</option>`).join('')}</select>
             <select name="banco" class="mini" aria-label="Banco ou cartão"><option value="">Banco/cartão</option>${f.bancos.map(b => `<option>${esc(b)}</option>`).join('')}<option value="__novo">+ Outro banco…</option></select><input name="bancoNovo" class="mini banco-novo" placeholder="Nome do banco" hidden>
             <label class="parc">em <input name="parcelas" class="mini n" value="1" inputmode="numeric" style="width:52px" aria-label="Parcelas">x</label>
             <input name="data" type="date" class="mini" value="${dataPadrao}">
             <button class="btn sm">Lançar</button></div></form>
+        <div class="chips" style="margin:12px 0 0">${[['', 'Todos'], ...Object.entries(F.PESSOAS)].map(([k, v]) => `<button class="chip ${finPessoa === k ? 'on' : ''}" data-act="fin-pessoa" data-v="${k}">${v}${k ? ` · ${F.brl(P.extras.filter(e => F.pessoaDe(e) === k).reduce((s2, e) => s2 + e.valorMes, 0))}` : ''}</button>`).join('')}</div>
         ${finCat ? `<div class="banner" style="margin:12px 0 0">Mostrando só ${esc(finCat)} <button class="btn ghost sm" data-act="fin-cat" data-v="">Ver todos</button></div>` : ''}
         <ul class="list fin-list">${lista.map(e => `<li class="fin-row extra"><span class="fin-dia">${e.data.slice(8, 10)}/${e.data.slice(5, 7)}</span>
-          <span class="t"><b>${esc(e.desc)}</b><span class="pill">${esc(e.cat || 'Outros')}</span><span class="pill ${e.forma === 'caju' ? 'f-faculdade banco' : ''}">${F.FORMAS[e.forma] || e.forma}${e.banco ? ' · ' + esc(e.banco) : ''}</span>${e.parcela ? `<span class="pill rose">${e.parcela}</span>` : ''}</span>
+          <span class="t"><b>${esc(e.desc)}</b>${pessoaPill(e)}<span class="pill">${esc(e.cat || 'Outros')}</span><span class="pill ${e.forma === 'caju' ? 'f-faculdade banco' : ''}">${F.FORMAS[e.forma] || e.forma}${e.banco ? ' · ' + esc(e.banco) : ''}</span>${e.parcela ? `<span class="pill rose">${e.parcela}</span>` : ''}</span>
           <b class="ex-val">${F.brl(e.valorMes)}</b><button class="x" data-act="del-extra" data-id="${e.id}" title="Apagar">×</button></li>`).join('') || '<li class="empty">Nenhum gasto extra lançado neste mês.</li>'}</ul></section>
       <section class="card line c-5"><h2>Por categoria <small>toque para filtrar</small></h2>${graficoCategorias(P.porCat)}
         <div class="fin-formas">${Object.entries(F.FORMAS).map(([k, v]) => { const t = P.extras.filter(e => e.forma === k).reduce((s, e) => s + e.valorMes, 0); return t ? `<div class="cx-row"><span>${v}</span><span></span><b>${F.brl(t)}</b></div>` : ''; }).join('')}</div>
@@ -689,6 +696,19 @@ function graficoEvolucao(f, mFim) {
         ${d.renda ? `<line class="renda" x1="${x(i) - bw / 2 - 6}" x2="${x(i) + bw / 2 + 6}" y1="${y(d.renda)}" y2="${y(d.renda)}"/>` : ''}
         <text class="eixo ${d.m === mFim ? 'sel' : ''}" x="${x(i)}" y="${H - 6}" text-anchor="middle">${F.nomeMes(d.m)}</text></g>`; }).join('')}
   </svg>`;
+}
+
+function graficoPessoas(P) {
+  const linhas = [['anny', 'Anny', P.rec.anny], ['irad', 'Irad', P.rec.irad], ['casal', 'Conjunto', null]];
+  const max = Math.max(1, ...linhas.map(([k]) => P.porPessoa[k].fixos + P.porPessoa[k].extras));
+  return `<h2>Por pessoa <small>contas fixas e extras de cada um</small></h2>
+    <ul class="destino-leg compacta"><li><span class="sw ch-fixos"></span>Fixos</li><li><span class="sw ch-extras"></span>Extras</li></ul>
+    <ul class="pessoas">${linhas.map(([k, nome, renda]) => { const v = P.porPessoa[k], tot = v.fixos + v.extras;
+      const parte = k !== 'casal' && P.divisao ? P.divisao[k] : null;
+      return `<li><button class="pes-nome p-${k}" data-act="fin-pessoa-ver" data-v="${k}" title="Ver gastos de ${nome}">${nome}</button>
+        <span class="pes-bar">${v.fixos ? `<i class="ch-fixos" style="width:${v.fixos / max * 100}%" data-tip="${nome} · fixos: ${F.brl(v.fixos)}"></i>` : ''}${v.extras ? `<i class="ch-extras" style="width:${v.extras / max * 100}%" data-tip="${nome} · extras: ${F.brl(v.extras)}"></i>` : ''}</span>
+        <b>${F.brl(tot)}</b>
+        <small>${k === 'casal' ? (P.divisao ? `você ${F.brl(P.divisao.anny)} · Irad ${F.brl(P.divisao.irad)} (pela renda)` : 'preencha as rendas para dividir') : renda ? `renda ${F.brl(renda)}${parte != null ? ` · com a parte do conjunto: ${F.brl(tot + parte)} (${Math.round((tot + parte) / renda * 100)}% da renda)` : ''}` : 'renda não preenchida'}</small></li>`; }).join('')}</ul>`;
 }
 
 function graficoCategorias(porCat) {
@@ -788,7 +808,7 @@ function salvarFin(t) {
     if (tipo === 'rec') { f.receitas[b] = { ...(f.receitas[b] || {}) }; const n = num(t.value); if (!t.value.trim() || n == null) delete f.receitas[b][a]; else f.receitas[b][a] = n; }
     if (tipo === 'liq') { const n = num(t.value); if (n == null || !t.value.trim()) delete f.liquido[a]; else f.liquido[a] = n; }
     if (tipo === 'pct') { const n = num(t.value); if (n != null) f.caixinhas[+a] = { ...f.caixinhas[+a], pct: n }; }
-    if (tipo === 'conta') { const c = f.contas.find(x => x.id === a); if (!c) return; if (b === 'nome' || b === 'banco') c[b] = t.value.trim() || c[b]; else { const n = num(t.value); c[b] = t.value.trim() === '' ? null : n ?? c[b]; } }
+    if (tipo === 'conta') { const c = f.contas.find(x => x.id === a); if (!c) return; if (b === 'nome' || b === 'banco' || b === 'pessoa') c[b] = t.value.trim() || c[b]; else { const n = num(t.value); c[b] = t.value.trim() === '' ? null : n ?? c[b]; } }
   });
 }
 
@@ -817,14 +837,14 @@ app.addEventListener('submit', async e => {
     const valor = num(f.valor.value); if (!f.desc.value.trim() || valor == null) return;
     let banco = f.banco.value || null;
     if (banco === '__novo') { banco = f.bancoNovo.value.trim(); if (!banco) { f.bancoNovo.focus(); toast('Escreva o nome do banco.'); return; } }
-    F.salvar(d => { d.extras = d.extras || []; if (banco && !d.bancos.includes(banco)) d.bancos.push(banco); d.extras.push({ id: uid(), desc: f.desc.value.trim(), valor, cat: f.cat.value, forma: f.forma.value, banco, parcelas: Math.max(1, num(f.parcelas.value) || 1), data: f.data.value || ymd(new Date()) }); });
+    F.salvar(d => { d.extras = d.extras || []; if (banco && !d.bancos.includes(banco)) d.bancos.push(banco); d.extras.push({ id: uid(), desc: f.desc.value.trim(), pessoa: f.pessoa.value || 'anny', valor, cat: f.cat.value, forma: f.forma.value, banco, parcelas: Math.max(1, num(f.parcelas.value) || 1), data: f.data.value || ymd(new Date()) }); });
     toast('Gasto lançado.'); return;
   }
   if (tipo === 'conta-nova') {
     let banco = f.banco.value;
     if (banco === '__novo') { banco = f.bancoNovo.value.trim(); if (!banco) { f.bancoNovo.focus(); toast('Escreva o nome do banco.'); return; } }
     const valor = num(f.valor.value); if (!f.nome.value.trim() || valor == null) return;
-    F.salvar(d => { if (!d.bancos.includes(banco)) d.bancos.push(banco); d.contas.push({ id: uid(), nome: f.nome.value.trim(), banco, dia: num(f.dia.value) || null, valor, desde: finMes }); });
+    F.salvar(d => { if (!d.bancos.includes(banco)) d.bancos.push(banco); d.contas.push({ id: uid(), nome: f.nome.value.trim(), banco, pessoa: f.pessoa.value, dia: num(f.dia.value) || null, valor, desde: finMes }); });
     toast('Conta adicionada.'); return;
   }
   if (tipo === 'compras' && v) { S.update('compras', [], l => { l.unshift({ id: uid(), t: v }); }); }
@@ -943,6 +963,8 @@ document.addEventListener('click', e => {
     case 'fin-mes': { const atual = F.mesDe(); finMes = b.dataset.v === '0' ? (atual < F.INICIO ? F.INICIO : atual) : F.mesMais(finMes, Number(b.dataset.v)); if (finMes < F.PRIMEIRO) finMes = F.PRIMEIRO; render(true); break; }
     case 'fin-aba': finAba = b.dataset.v; render(true); break;
     case 'fin-cat': finCat = b.dataset.v; if (finAba !== 'extras') finAba = 'extras'; render(); break;
+    case 'fin-pessoa-ver': finPessoa = b.dataset.v; finAba = 'extras'; render(true); break;
+    case 'fin-pessoa': finPessoa = b.dataset.v; render(); break;
     case 'fin-base': F.salvar(d => { d.caixaBase = b.dataset.v; }); break;
     case 'del-extra': { const e = (F.dados().extras || []).find(x => x.id === id); if (e && confirm(`Apagar "${e.desc}"${Number(e.parcelas) > 1 ? ' e todas as parcelas' : ''}?`)) F.salvar(d => { d.extras = d.extras.filter(x => x.id !== id); }); break; }
     case 'fin-editar': finEditar = !finEditar; render(); break;

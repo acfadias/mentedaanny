@@ -72,6 +72,8 @@ export const corBanco = b => CORES_BANCO[b] || 'neutro';
 
 // ---------- Rendas, gastos extras e análise ----------
 export const CATEGORIAS = ['Mercado', 'Delivery e restaurante', 'Transporte', 'Saúde', 'Bebê', 'Casa', 'Pets', 'Compras', 'Lazer', 'Beleza', 'Presentes', 'Outros'];
+export const PESSOAS = { anny: 'Anny', irad: 'Irad', casal: 'Conjunto' };
+export const pessoaDe = x => PESSOAS[x?.pessoa] ? x.pessoa : 'casal';
 export const FORMAS = { credito: 'Cartão de crédito', debito: 'Débito', pix: 'Pix', caju: 'Caju', dinheiro: 'Dinheiro' };
 
 export function receitas(f, m) {
@@ -105,7 +107,14 @@ export function painel(f, m) {
   const porCat = {};
   for (const e of extras) porCat[e.cat || 'Outros'] = (porCat[e.cat || 'Outros'] || 0) + e.valorMes;
   const credito = extras.filter(e => e.forma === 'credito').reduce((s, e) => s + e.valorMes, 0);
-  return { ...r, rec, renda, caju, extras, extrasTotal, extrasCaju, extrasDinheiro, caixinhas, caixasTotal, sobra, porCat, credito, gastos: r.total + extrasTotal, base };
+  // Separação por pessoa (contas fixas + extras pagos em dinheiro/cartão; Caju fica de fora)
+  const porPessoa = { anny: { fixos: 0, extras: 0 }, irad: { fixos: 0, extras: 0 }, casal: { fixos: 0, extras: 0 } };
+  for (const c of r.contas) porPessoa[pessoaDe(c)].fixos += valorNoMes(f, c, m) || 0;
+  for (const e of extras) if (e.forma !== 'caju') porPessoa[pessoaDe(e)].extras += e.valorMes;
+  const rA = Number(rec.anny) || 0, rI = Number(rec.irad) || 0;
+  const conj = porPessoa.casal.fixos + porPessoa.casal.extras;
+  const divisao = renda ? { anny: conj * rA / renda, irad: conj * rI / renda, pctAnny: Math.round(rA / renda * 100) } : null;
+  return { ...r, porPessoa, divisao, rec, renda, caju, extras, extrasTotal, extrasCaju, extrasDinheiro, caixinhas, caixasTotal, sobra, porCat, credito, gastos: r.total + extrasTotal, base };
 }
 
 // Parcelas que já estão comprometidas nos próximos meses
@@ -130,6 +139,7 @@ export function analise(f, m) {
     if (Math.abs(dif) >= 15) out.push({ tom: dif > 0 ? 'atencao' : 'ok', txt: `Os gastos extras estão ${Math.abs(dif)}% ${dif > 0 ? 'acima' : 'abaixo'} da média dos últimos meses (${brl(media)}).` });
   }
   const cats = Object.entries(p.porCat).sort((a, b) => b[1] - a[1]);
+  if (p.divisao && (p.porPessoa.casal.fixos + p.porPessoa.casal.extras)) out.push({ tom: 'info', txt: `Gastos em conjunto: ${brl(p.porPessoa.casal.fixos + p.porPessoa.casal.extras)}. Dividindo pela renda de cada um, você entra com ${brl(p.divisao.anny)} (${p.divisao.pctAnny}%) e o Irad com ${brl(p.divisao.irad)} (${100 - p.divisao.pctAnny}%).` });
   if (cats.length) out.push({ tom: 'info', txt: `Maior gasto extra: ${cats[0][0]}, com ${brl(cats[0][1])}${p.extrasTotal ? ` (${pct(cats[0][1], p.extrasTotal)}% dos extras)` : ''}.` });
   if (p.caju) { const resta = p.caju - p.extrasCaju; out.push({ tom: resta < 0 ? 'atencao' : 'ok', txt: resta < 0 ? `O Caju acabou: os gastos no Caju passaram ${brl(-resta)} do saldo do mês.` : `Ainda restam ${brl(resta)} no Caju este mês. Use no mercado antes de usar o cartão.` }); }
   if (p.credito) out.push({ tom: 'info', txt: `${brl(p.credito)} em compras no crédito caem neste mês.` });

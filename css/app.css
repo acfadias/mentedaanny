@@ -589,3 +589,19 @@ dialog .row input{min-width:0;border:1px solid var(--line);background:var(--bg);
 @media (max-width:560px){.cat-bars button{grid-template-columns:minmax(0,110px) minmax(0,1fr) 74px}}
 
 .banco-novo{width:150px;animation:itemIn .3s var(--ease) both}
+
+/* Por pessoa: Anny rosé, Irad azul, Conjunto marrom */
+.p-anny{--pc:var(--accent)}.p-irad{--pc:var(--ch-sobra)}.p-casal{--pc:var(--fg)}
+.pill.pessoa{border-color:var(--pc);color:var(--pc)}
+.pessoa-esc{display:flex;gap:6px;flex-wrap:wrap}
+.pessoa-esc .chip{--c:var(--pc)}
+.pessoas{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:12px}
+.pessoas li{display:grid;grid-template-columns:110px minmax(0,1fr) 110px;grid-template-rows:auto auto;gap:4px 14px;align-items:center}
+.pes-nome{border:0;background:transparent;padding:0;text-align:left;font-family:var(--display);font-size:20px;cursor:pointer;color:var(--pc);text-decoration:underline;text-decoration-color:transparent;text-underline-offset:4px;transition:text-decoration-color .2s}
+.pes-nome:hover{text-decoration-color:currentColor}
+.pes-bar{display:flex;gap:2px;height:16px;align-items:stretch}
+.pes-bar i{display:block;background:var(--k);animation:cresce .9s var(--ease) both;transform-origin:left;min-width:3px}
+.pes-bar i:first-child{border-radius:6px 0 0 6px}.pes-bar i:last-child{border-radius:0 6px 6px 0}.pes-bar i:only-child{border-radius:6px}
+.pessoas b{text-align:right;font-variant-numeric:tabular-nums}
+.pessoas small{grid-column:2/4;color:var(--muted);font-size:12.5px}
+@media (max-width:560px){.pessoas li{grid-template-columns:80px minmax(0,1fr) 84px}.pessoas small{grid-column:1/-1}}
