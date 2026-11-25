@@ -11,6 +11,10 @@ create table if not exists public.dados (
 
 create index if not exists dados_atualizado_idx on public.dados (user_id, atualizado);
 
+-- Projetos novos do Supabase nem sempre liberam tabelas criadas pelo SQL Editor
+grant usage on schema public to authenticated, service_role;
+grant select, insert, update, delete on table public.dados to authenticated, service_role;
+
 alter table public.dados enable row level security;
 
 drop policy if exists "ler os meus dados" on public.dados;
