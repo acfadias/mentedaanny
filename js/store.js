@@ -114,7 +114,9 @@ async function enviar() {
   const chaves = pendentes();
   if (!chaves.length) return;
   status('busy');
-  const linhas = chaves.map(k => { const r = rec(k); return r && { user_id: usuario.id, chave: k, valor: r.v ?? null, atualizado: r.t }; }).filter(Boolean);
+  // Marca com o horário do envio (não o da edição): assim nenhum aparelho deixa passar algo enviado com atraso
+  const agora = Date.now();
+  const linhas = chaves.map(k => { const r = rec(k); if (!r) return null; const t = Math.max(r.t, agora); if (t !== r.t) { r.t = t; lsSet('d:' + k, JSON.stringify(r)); } return { user_id: usuario.id, chave: k, valor: r.v ?? null, atualizado: t }; }).filter(Boolean);
   const { error } = await sb.from('dados').upsert(linhas, { onConflict: 'user_id,chave' });
   if (error) { console.warn('sync', error); ultimoErro = 'Envio: ' + (error.message || error.code); status('erro'); return; }
   const restantes = pendentes().filter(k => !chaves.includes(k) || rec(k)?.t > (linhas.find(l => l.chave === k)?.atualizado || 0));
@@ -150,7 +152,7 @@ export async function iniciarNuvem() {
     const { data } = await sb.auth.getSession();
     usuario = data.session?.user || null;
     sb.auth.onAuthStateChange((_e, s) => { const antes = usuario?.id; usuario = s?.user || null; if (usuario && usuario.id !== antes) { primeiraSync(); ligarTempoReal(); } status(usuario ? 'on' : 'deslogado'); });
-    if (usuario) { await primeiraSync(); ligarTempoReal(); } else status('deslogado');
+    if (usuario) { lsSet('_puxado', '0'); await primeiraSync(); ligarTempoReal(); } else status('deslogado'); // ao abrir, busca tudo da conta
     addEventListener('online', () => puxar());
     document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') puxar(); });
   } catch (e) { console.warn('Supabase indisponível', e); status('erro'); }
