@@ -6,9 +6,10 @@ import { FRASES, CATEGORIAS, AO_MARCAR, DIA_COMPLETO, DIA_DIFICIL, sortear } fro
 import { confeteEm, festa, toast } from './efeitos.js';
 import * as A from './agenda.js';
 import * as F from './financas.js';
+import * as E from './entregas.js';
 import { montarDia, planoTcc, remarcarTcc, segunda, TCC_BLOCOS, janelaParaAdiantar, adiantarTcc, pendenciasSemana } from './dia.js';
 
-const VERSAO = '25'; // a mesma versão vai em version.json; o app se atualiza sozinho quando ela muda
+const VERSAO = '26'; // a mesma versão vai em version.json; o app se atualiza sozinho quando ela muda
 const $ = (s, el = document) => el.querySelector(s);
 const app = $('#app');
 const ICO_CORACAO = on => `<svg viewBox="0 0 24 24" width="16" height="16" fill="${on ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10z"/></svg>`;
@@ -147,6 +148,18 @@ function cardProximo(itens, p) {
     ${dificil ? `<p style="margin:8px 0 0;opacity:.9;font-size:14px">${esc(sortear(DIA_DIFICIL))}</p>` : ''}</div></section>`;
 }
 
+function cardEntregas(todas = false) {
+  const lista = todas ? E.listar() : E.pendentes();
+  if (!lista.length) return todas ? '<section class="card line"><h2>Entregas</h2><p class="empty">Nenhuma entrega nos próximos 30 dias. Para cadastrar, use “+ Compromisso” e marque “É uma entrega”.</p></section>' : '';
+  const urg = lista.filter(x => !x.entregue && (x.nivel === 'urgente' || x.nivel === 'atrasada')).length;
+  return `<section class="entregas ${urg ? 'tem-urgente' : ''}" aria-label="Entregas da faculdade">
+    <div class="ent-topo"><h2>${urg ? 'Prazo chegando' : 'Próximas entregas'}</h2><span>${todas ? 'próximos 30 dias' : 'não deixe passar'}</span></div>
+    <ul>${lista.map(x => { const d = new Date(x.ms);
+      return `<li class="ent n-${x.nivel}"><div class="ent-cont"><b>${E.quando(x)}</b><small>${DIAS_CURTO[d.getDay()]} ${d.getDate()}/${d.getMonth() + 1}${d.getHours() || d.getMinutes() ? ' · ' + String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0') : ''}</small></div>
+        <div class="ent-tit">${esc(x.titulo)}${x.nivel === 'atrasada' ? '<small>Confira se ainda aceita entrega atrasada e fale com o tutor hoje.</small>' : x.nivel === 'urgente' ? '<small>Reserve um bloco hoje só para isso.</small>' : x.nivel === 'atencao' ? '<small>Comece hoje, mesmo que seja 25 minutos.</small>' : ''}</div>
+        <div class="ent-acts">${x.link ? `<a class="btn ghost sm" href="${esc(x.link)}" target="_blank" rel="noopener">Abrir ↗</a>` : ''}<button class="btn ${x.entregue ? 'ghost' : 'rose'} sm" data-act="entregue" data-k="${esc(x.k)}" data-on="${x.entregue ? '0' : '1'}">${x.entregue ? 'Desfazer' : 'Entreguei'}</button></div></li>`; }).join('')}</ul></section>`;
+}
+
 function cardPendencias() {
   const pend = pendenciasSemana();
   if (!pend.length) return '';
@@ -190,6 +203,7 @@ function telaHoje() {
       <div class="c-5">${cardFrase(fraseExtra, anel(p, 112))}</div>
     </div>
     ${atalhos(dia)}
+    ${cardEntregas()}
     ${(() => { const c = A.cache(), l = S.get('agendas', {}); const erro = c.erros?.geral || Object.entries(c.erros || {}).filter(([k]) => !A.enviados(k)).map(([, v]) => v)[0]; return (l.pessoal || l.trabalho) && erro ? `<a class="banner" href="#ajustes" style="text-decoration:none;margin-top:0">Suas agendas não estão aparecendo: ${esc(erro)} <b>Ver em Ajustes →</b></a>` : ''; })()}
     <div class="grid">
       <div class="c-7 stack">${cardAgenda(dia)}${cardProximo(itens, p)}${cardConvergencia(dia)}<section class="card"><h2>Seu dia <span class="row">${legenda()}<small>${dia.contaveis.filter(i => i.feito).length} de ${dia.contaveis.length} tarefas</small><button class="btn ghost sm" data-act="novo-comp">+ Compromisso</button></span></h2>${linhaDoTempo(dia)}</section></div>
@@ -361,6 +375,7 @@ function telaFaculdade() {
   return `<div class="view">
     <div class="hero"><div><p class="eyebrow">EAD · reta final</p><h1>Faculdade <em>& TCC.</em></h1></div><div class="hero-side">${anel({ ok: feitos, total: TCC_BLOCOS, pct: feitos / TCC_BLOCOS })}</div></div>
     <div class="grid">
+      <div class="c-12">${cardEntregas(true)}</div>
       <div class="c-7 stack">
         <section class="card"><h2>Blocos da semana <small>${feitos}h de ${TCC_BLOCOS}h</small></h2>
           ${plano.length ? `<ul class="list">${plano.map(b => { const d = deYmd(b.data); const ok = !!S.get('checks:' + b.data, {})[b.id]; return `<li class="li f-faculdade ${ok ? 'feito' : ''}">
@@ -471,6 +486,7 @@ function dialogoCompromisso(fonte = 'trabalho', dataPadrao = null) {
     <div class="row"><input type="date" name="data" value="${dataPadrao || ymd(d)}" required style="flex:1.4"><input type="time" name="ini" value="${h}:00" required style="flex:1"><input type="time" name="fim" value="${h}:30" style="flex:1"></div>
     <input name="link" type="url" placeholder="Link da reunião/aula (opcional)" autocomplete="off">
     <label class="row note" style="cursor:pointer"><input type="checkbox" name="semanal" class="chk"> Repete toda semana</label>
+    <label class="row note" style="cursor:pointer"><input type="checkbox" name="entrega" class="chk" ${fonte === 'faculdade' ? '' : ''}> É uma entrega da faculdade (lembretes de prazo)</label>
     <div class="row" style="justify-content:flex-end;margin-top:6px"><button class="btn ghost" value="cancelar" formnovalidate>Cancelar</button><button class="btn" value="salvar">Salvar</button></div>
   </form>`;
   dlg.showModal();
@@ -531,7 +547,9 @@ function atalhos(dia) {
     ${t('#trabalho', 'trabalho', 'Trabalho', prox ? esc(prox.titulo) : trabEv.length ? 'Reuniões feitas' : 'Sem reuniões', prox ? `${prox.hora} · ${tarefasT} tarefas` : `${tarefasT} tarefas abertas`)}
     ${t('#financas', 'financas', 'Finanças', venc.length ? `${venc.length} pra pagar` : px ? esc(px.nome) : 'Tudo pago', venc.length ? F.brl(venc.reduce((a, v) => a + (v.valor || 0), 0)) : px ? `dia ${px.dia} · ${F.brl(F.valorNoMes(F.dados(), px, F.mesDe()))}` : 'neste mês', null, venc.length > 0)}
     ${t('#casa', 'casa', 'Casa', casa.length ? `${casaOk} de ${casa.length}` : 'Dia livre', `${compras} na lista de compras`, casa.length ? casaOk / casa.length : null)}
-    ${t('#faculdade', 'faculdade', 'TCC', `${tccOk} de ${TCC_BLOCOS}h`, tccHoje ? `hoje às ${tccHoje.hora}` : 'nenhum bloco hoje', tccOk / TCC_BLOCOS)}
+    ${(() => { const ent = E.pendentes(), urg = ent.filter(x => x.nivel === 'urgente' || x.nivel === 'atrasada');
+      return ent.length ? t('#faculdade', 'faculdade', 'Faculdade', urg.length ? `${urg.length} entrega${urg.length > 1 ? 's' : ''} já` : `${ent.length} entrega${ent.length > 1 ? 's' : ''}`, `${esc(ent[0].titulo)} · ${E.quando(ent[0]).toLowerCase()}`, null, urg.length > 0)
+        : t('#faculdade', 'faculdade', 'TCC', `${tccOk} de ${TCC_BLOCOS}h`, tccHoje ? `hoje às ${tccHoje.hora}` : 'nenhum bloco hoje', tccOk / TCC_BLOCOS); })()}
     ${t('#devocional', 'devocional', 'Devocional', devo ? 'Feito' : 'Pendente', plDia ? esc(plDia.foco) : 'plano do dia')}
     ${t('#frases', 'frases', 'Frases', `${favs} favoritas`, 'suas afirmações')}
   </nav>`;
@@ -883,7 +901,8 @@ app.addEventListener('submit', async e => {
 document.addEventListener('submit', e => {
   const f = e.target; if (f.dataset.form !== 'comp') return;
   if (e.submitter?.value !== 'salvar') return;
-  const c = { id: uid(), titulo: f.titulo.value.trim(), fonte: f.fonte.value, data: f.data.value, ini: f.ini.value, fim: f.fim.value && f.fim.value > f.ini.value ? f.fim.value : f.ini.value, link: f.link.value.trim() || null, semanal: f.semanal.checked };
+  const c = { id: uid(), titulo: f.titulo.value.trim(), fonte: f.fonte.value, data: f.data.value, ini: f.ini.value, fim: f.fim.value && f.fim.value > f.ini.value ? f.fim.value : f.ini.value, link: f.link.value.trim() || null, semanal: f.semanal.checked, entrega: f.entrega.checked };
+  if (c.entrega) c.fonte = 'faculdade';
   if (!c.titulo || !c.data || !c.ini) return;
   S.update('compromissos', [], l => { l.push(c); });
   toast('Compromisso salvo. Eu reorganizo o resto em volta.');
@@ -986,6 +1005,7 @@ document.addEventListener('click', e => {
     }
     case 'ocultar': { const ev = EVS.get(id); if (ev) dialogoOcultar(ev); break; }
     case 'mostrar-ev': A.mostrar(b.dataset.tipo, id); toast('Voltou a aparecer.'); break;
+    case 'entregue': { const on = b.dataset.on === '1'; E.marcar(b.dataset.k, on); if (on) { festa(); toast('Entregue! Menos um peso. Orgulho de você.', 4000); } break; }
     case 'novo-comp': dialogoCompromisso(b.dataset.fonte, b.dataset.data); break;
     case 'semana': semanaOffset = b.dataset.v === '0' ? 0 : semanaOffset + Number(b.dataset.v); render(true); break;
     case 'del-comp': if (confirm('Apagar este compromisso?')) S.update('compromissos', [], l => l.filter(c => c.id !== id)); break;
@@ -1095,6 +1115,21 @@ async function conferirVersao() {
 }
 conferirVersao();
 setInterval(conferirVersao, 10 * 60000);
+
+// ---------- Alertas de prazo ----------
+function alertarEntregas() {
+  const hoje = hojeStr();
+  for (const x of E.pendentes()) {
+    if (!['urgente', 'atrasada', 'atencao'].includes(x.nivel)) continue;
+    const marca = `mda:alertou:${x.k}:${x.nivel}:${hoje}:${new Date().getHours() < 13 ? 'm' : 't'}`;
+    try { if (localStorage.getItem(marca)) continue; localStorage.setItem(marca, '1'); } catch {}
+    const msg = x.nivel === 'atrasada' ? `Prazo vencido: ${x.titulo}. Fale com o tutor hoje.` : x.dias === 0 ? `Entrega HOJE: ${x.titulo}` : x.dias === 1 ? `Entrega amanhã: ${x.titulo}` : `Faltam ${x.dias} dias para entregar: ${x.titulo}`;
+    toast(msg, 8000);
+    if ('Notification' in window && Notification.permission === 'granted') try { new Notification('Entrega da faculdade', { body: msg, icon: 'icons/icon-192.png', tag: x.k }); } catch {}
+  }
+}
+setTimeout(alertarEntregas, 2500);
+setInterval(alertarEntregas, 30 * 60000);
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') conferirVersao(); });
 // Ao voltar para o app (iPad/celular), atualiza as agendas se a última leitura tiver mais de 5 min
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && Date.now() - (A.cache().quando || 0) > 5 * 60000) recarregarAgenda(); });

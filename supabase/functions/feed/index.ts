@@ -22,12 +22,13 @@ function dobrar(linha: string) {
 const dt = (data: string, hora: string) => `${data.replace(/-/g, '')}T${hora.replace(':', '')}00`;
 const stamp = new Date().toISOString().replace(/[-:]/g, '').replace(/\.\d+/, '');
 
-function evento(o: { uid: string; titulo: string; ini: string; fim: string; rrule?: string; desc?: string; url?: string | null; alerta?: number }) {
+function evento(o: { uid: string; titulo: string; ini: string; fim: string; rrule?: string; desc?: string; url?: string | null; alerta?: number; alertasExtras?: string[] }) {
   const L = ['BEGIN:VEVENT', `UID:${o.uid}@mentedaanny`, `DTSTAMP:${stamp}`, `DTSTART;TZID=America/Sao_Paulo:${o.ini}`, `DTEND;TZID=America/Sao_Paulo:${o.fim}`, `SUMMARY:${esc(o.titulo)}`];
   if (o.rrule) L.push(`RRULE:${o.rrule}`);
   if (o.desc || o.url) L.push(`DESCRIPTION:${esc([o.desc, o.url].filter(Boolean).join('\n'))}`);
   if (o.url) { L.push(`URL:${esc(o.url)}`); L.push(`LOCATION:${esc(o.url)}`); }
   if (o.alerta != null) L.push('BEGIN:VALARM', 'ACTION:DISPLAY', `DESCRIPTION:${esc(o.titulo)}`, `TRIGGER:-PT${o.alerta}M`, 'END:VALARM');
+  for (const t of o.alertasExtras ?? []) L.push('BEGIN:VALARM', 'ACTION:DISPLAY', `DESCRIPTION:${esc('Prazo: ' + o.titulo)}`, `TRIGGER:${t}`, 'END:VALARM');
   L.push('END:VEVENT');
   return L;
 }
@@ -50,7 +51,7 @@ Deno.serve(async (req) => {
   for (const c of (comp?.valor ?? []) as any[]) {
     if (!c?.data || !c?.ini) continue;
     const dia = ['SU', 'MO', 'TU', 'WE', 'TH', 'FR', 'SA'][new Date(c.data + 'T12:00:00').getDay()];
-    L.push(...evento({ uid: 'comp-' + c.id, titulo: c.titulo, ini: dt(c.data, c.ini), fim: dt(c.data, c.fim || c.ini), rrule: c.semanal ? `FREQ=WEEKLY;BYDAY=${dia}` : undefined, desc: `Agenda: ${FONTE[c.fonte] ?? 'Pessoal'}`, url: c.link, alerta: 10 }));
+    L.push(...evento({ uid: 'comp-' + c.id, titulo: c.titulo, ini: dt(c.data, c.ini), fim: dt(c.data, c.fim || c.ini), rrule: c.semanal ? `FREQ=WEEKLY;BYDAY=${dia}` : undefined, desc: c.entrega ? 'ENTREGA DA FACULDADE: não deixe passar o prazo' : `Agenda: ${FONTE[c.fonte] ?? 'Pessoal'}`, url: c.link, alerta: c.entrega ? 120 : 10, alertasExtras: c.entrega ? ['-P3D', '-P1D', '-PT6H'] : [] }));
   }
   for (const row of tccs ?? []) for (const b of (row.valor ?? []) as any[]) {
     const [h, m] = String(b.hora).split(':').map(Number); const f = h * 60 + m + 60;

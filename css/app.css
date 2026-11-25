@@ -605,3 +605,26 @@ dialog .row input{min-width:0;border:1px solid var(--line);background:var(--bg);
 .pessoas b{text-align:right;font-variant-numeric:tabular-nums}
 .pessoas small{grid-column:2/4;color:var(--muted);font-size:12.5px}
 @media (max-width:560px){.pessoas li{grid-template-columns:80px minmax(0,1fr) 84px}.pessoas small{grid-column:1/-1}}
+
+/* ---------- Entregas da faculdade ---------- */
+.entregas{border-radius:var(--radius);padding:clamp(16px,2.2vw,22px);margin:0 0 clamp(14px,2vw,22px);background:var(--surface);border:1.5px solid var(--ch-extras)}
+.entregas.tem-urgente{border-color:var(--accent);box-shadow:0 0 0 4px color-mix(in srgb,var(--accent) 14%,transparent)}
+.ent-topo{display:flex;justify-content:space-between;align-items:baseline;gap:12px;margin-bottom:10px}
+.ent-topo h2{font-size:clamp(22px,2.4vw,28px)}
+.ent-topo span{font-size:13px;color:var(--muted)}
+.entregas ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px}
+.ent{display:grid;grid-template-columns:150px minmax(0,1fr) auto;gap:14px;align-items:center;padding:12px 14px;border-radius:16px;background:var(--bg);border-left:5px solid var(--muted);animation:itemIn .45s var(--ease) both}
+.ent-cont b{display:block;font-family:var(--display);font-weight:400;font-size:20px;line-height:1.1}
+.ent-cont small,.ent-tit small{display:block;color:var(--muted);font-size:12.5px;margin-top:2px;font-weight:400}
+.ent-tit{font-weight:600;min-width:0;overflow-wrap:anywhere}
+.ent-acts{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
+.ent.n-aviso{border-left-color:var(--ch-extras)}
+.ent.n-atencao{border-left-color:var(--ch-extras);background:color-mix(in srgb,var(--ch-extras) 10%,var(--bg))}
+.ent.n-atencao .ent-cont b{color:var(--ch-extras)}
+.ent.n-urgente,.ent.n-atrasada{border-left-color:var(--accent);background:color-mix(in srgb,var(--accent) 14%,var(--bg))}
+.ent.n-urgente .ent-cont b,.ent.n-atrasada .ent-cont b{color:var(--accent)}
+.ent.n-urgente{animation:itemIn .45s var(--ease) both,alerta 2.4s ease-in-out infinite}
+@keyframes alerta{50%{box-shadow:0 0 0 4px color-mix(in srgb,var(--accent) 25%,transparent)}}
+.ent.n-ok{opacity:.55}
+.ent.n-ok .ent-tit{text-decoration:line-through}
+@media (max-width:640px){.ent{grid-template-columns:1fr;gap:6px}.ent-acts{justify-content:flex-start}}
