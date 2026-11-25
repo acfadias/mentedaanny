@@ -628,3 +628,20 @@ dialog .row input{min-width:0;border:1px solid var(--line);background:var(--bg);
 .ent.n-ok{opacity:.55}
 .ent.n-ok .ent-tit{text-decoration:line-through}
 @media (max-width:640px){.ent{grid-template-columns:1fr;gap:6px}.ent-acts{justify-content:flex-start}}
+
+/* Lista de compras por categoria */
+.compra-grupo{margin-top:14px}
+.compra-grupo h3{font-family:var(--text);font-size:11px;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);font-weight:600;margin:0 0 2px;display:flex;gap:8px;align-items:center}
+.compra-grupo h3 small{background:var(--surface-2);border-radius:999px;padding:0 7px;font-size:11px;letter-spacing:0}
+.compra-grupo h3::after{content:"";flex:1;height:1px;background:var(--line)}
+.cat-sel{border:1px solid transparent;background:transparent;color:var(--muted);font-size:12px;border-radius:999px;padding:3px 6px;max-width:130px;cursor:pointer;opacity:.75;transition:opacity .2s,border-color .2s}
+.cat-sel:hover,.cat-sel:focus{opacity:1;border-color:var(--line);outline:none}
+.sugestoes{margin-top:10px;font-size:14px}
+.sugestoes summary{cursor:pointer;color:var(--muted);font-size:13px}
+.sug-grupo{display:grid;grid-template-columns:130px 1fr;gap:8px;align-items:start;margin-top:8px}
+.sug-grupo>span{font-size:12px;color:var(--muted);padding-top:6px}
+@media (max-width:560px){.sug-grupo{grid-template-columns:1fr}.cat-sel{max-width:96px}}
+.fr .compra-grupo h3{font-size:12px}
+/* seletor de categoria discreto: só um ícone, abre a lista ao tocar */
+.cat-sel{appearance:none;-webkit-appearance:none;width:30px;height:30px;padding:0;color:transparent;max-width:none;background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%238A6E5C' stroke-width='1.8' stroke-linecap='round'%3E%3Cpath d='M4 7h16M4 12h10M4 17h6'/%3E%3C/svg%3E") center/16px no-repeat;opacity:.6}
+.cat-sel option{color:#593A26;background:#FDF5E7}

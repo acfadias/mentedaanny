@@ -7,9 +7,10 @@ import { confeteEm, festa, toast } from './efeitos.js';
 import * as A from './agenda.js';
 import * as F from './financas.js';
 import * as E from './entregas.js';
+import * as C from './compras.js';
 import { montarDia, planoTcc, remarcarTcc, segunda, TCC_BLOCOS, janelaParaAdiantar, adiantarTcc, pendenciasSemana } from './dia.js';
 
-const VERSAO = '26'; // a mesma versão vai em version.json; o app se atualiza sozinho quando ela muda
+const VERSAO = '27'; // a mesma versão vai em version.json; o app se atualiza sozinho quando ela muda
 const $ = (s, el = document) => el.querySelector(s);
 const app = $('#app');
 const ICO_CORACAO = on => `<svg viewBox="0 0 24 24" width="16" height="16" fill="${on ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10z"/></svg>`;
@@ -220,7 +221,6 @@ function semanaBase() {
 function telaCasa() {
   const dias = semanaBase(), hoje = hojeStr();
   const compras = S.get('compras', []);
-  const sugest = ['Leite', 'Pão', 'Ovos', 'Frutas', 'Café', 'Papel higiênico', 'Fraldas', 'Lenço umedecido', 'Detergente', 'Sabão de roupa'];
   const naLista = new Set(compras.filter(c => !c.feito).map(c => c.t.toLowerCase()));
   const bebe = S.get('config', {}).bebe;
   return `<div class="view">
@@ -234,16 +234,18 @@ function telaCasa() {
       </div></section>
       <section class="card c-7"><h2>Lista de compras <small>${compras.filter(c => !c.feito).length} itens</small></h2>
         <form class="add" data-form="compras"><input name="t" placeholder="Acabou o quê?" autocomplete="off" data-k="compras-in" enterkeyhint="send"><button class="btn">Adicionar</button></form>
-        <div class="chips">${sugest.filter(s => !naLista.has(s.toLowerCase())).map(s => `<button class="chip" data-act="sugestao" data-t="${esc(s)}">+ ${esc(s)}</button>`).join('')}</div>
-        <ul class="list" style="margin-top:10px">${compras.length ? compras.map(c => `<li class="li f-pessoal ${c.feito ? 'feito' : ''}"><input type="checkbox" class="chk" data-compra="${c.id}" ${c.feito ? 'checked' : ''} aria-label="${esc(c.t)}"><span class="t">${esc(c.t)}</span><button class="x" data-act="del-compra" data-id="${c.id}" aria-label="Apagar">×</button></li>`).join('') : '<li class="empty">Lista vazia. Geladeira feliz.</li>'}</ul>
+        <details class="sugestoes"><summary>Sugestões rápidas</summary>${Object.entries(C.SUGESTOES).map(([k, itens]) => { const f = itens.filter(x => !naLista.has(x.toLowerCase())); return f.length ? `<div class="sug-grupo"><span>${C.NOME[k]}</span><div class="chips" style="margin:0">${f.map(x => `<button class="chip" data-act="sugestao" data-t="${esc(x)}">+ ${esc(x)}</button>`).join('')}</div></div>` : ''; }).join('')}</details>
+        ${compras.length ? C.agrupar(compras).map(([k, itens]) => `<div class="compra-grupo"><h3>${C.NOME[k]} <small>${itens.filter(c => !c.feito).length}</small></h3><ul class="list">${itens.map(c => `<li class="li f-pessoal ${c.feito ? 'feito' : ''}"><input type="checkbox" class="chk" data-compra="${c.id}" ${c.feito ? 'checked' : ''} aria-label="${esc(c.t)}"><span class="t">${esc(c.t)}</span>
+          <select class="cat-sel" data-compra-cat="${c.id}" aria-label="Categoria de ${esc(c.t)}" title="Trocar categoria">${C.CATS.map(([ck, cn]) => `<option value="${ck}" ${ck === k ? 'selected' : ''}>${cn}</option>`).join('')}</select>
+          <button class="x" data-act="del-compra" data-id="${c.id}" aria-label="Apagar">×</button></li>`).join('')}</ul></div>`).join('') : '<p class="empty">Lista vazia. Geladeira feliz.</p>'}
         ${compras.some(c => c.feito) ? '<div class="row" style="margin-top:12px"><button class="btn ghost sm" data-act="limpar-compras">Limpar comprados</button></div>' : ''}
       </section>
       <section class="card line c-5"><h2>Como funciona</h2><div class="note">
-        <p> <b>Louça</b> dia sim, dia não: seg, qua e sex.</p>
-        <p> <b>Roupa</b> nos dias sem louça: ter e qui.</p>
-        <p> <b>Chão</b> qua e sex — casa limpa antes do fim de semana.</p>
-        <p> <b>Área dos cachorros</b> junto com a roupa: ter e qui.</p>
-        <p> <b>Garagem</b> toda sexta, na hora do almoço.</p>
+        <p><b>Louça</b> dia sim, dia não: seg, qua e sex.</p>
+        <p><b>Roupa</b> nos dias sem louça: ter e qui.</p>
+        <p><b>Chão</b> qua e sex — casa limpa antes do fim de semana.</p>
+        <p><b>Área dos cachorros</b> junto com a roupa: ter e qui.</p>
+        <p><b>Garagem</b> toda sexta, na hora do almoço.</p>
         <p><b>Cozinha e escritório</b> todo dia útil às 18h30, antes do jantar.</p>
         <p>Se algo ficar pra trás, aparece no dia seguinte como <b>opcional</b>. Nada fica vermelho. Dá pra “deixar pra lá” sem culpa.</p>
       </div></section>
@@ -358,7 +360,7 @@ function telaGeladeira() {
       ${cardProximo(itens, p)}
       <section class="card"><h2>Compras <small>${compras.length}</small></h2>
         <form class="add" data-form="compras"><input name="t" placeholder="Acabou o quê?" autocomplete="off" data-k="fr-compras"><button class="btn">+</button></form>
-        <ul class="list">${compras.slice(0, 8).map(c => `<li class="li"><input type="checkbox" class="chk" data-compra="${c.id}"><span class="t">${esc(c.t)}</span></li>`).join('') || '<li class="empty">Nada faltando.</li>'}</ul></section>
+        ${compras.length ? C.agrupar(compras).map(([k, itens]) => `<div class="compra-grupo"><h3>${C.NOME[k]}</h3><ul class="list">${itens.map(c => `<li class="li"><input type="checkbox" class="chk" data-compra="${c.id}"><span class="t">${esc(c.t)}</span></li>`).join('')}</ul></div>`).join('') : '<p class="empty">Nada faltando.</p>'}</section>
     </div>
     <section class="card"><h2>Hoje</h2>${linhaDoTempo(dia)}</section>
     <div class="fr-dim" id="fr-dim"></div>
@@ -823,6 +825,7 @@ app.addEventListener('change', e => {
   else if (t.dataset.pago) { F.marcarPago(t.dataset.pago, t.checked, finMes || F.mesDe()); if (t.checked) { confeteEm(t, 14); toast('Conta paga. Uma preocupação a menos.'); } }
   else if (t.dataset.fin) salvarFin(t);
   else if (t.dataset.trab) { S.update('trabalho:tarefas', [], l => { const c = l.find(x => x.id === t.dataset.trab); if (c) c.feito = t.checked; }); if (t.checked) { confeteEm(t, 14); toast(sortear(AO_MARCAR)); } }
+  else if (t.dataset.compraCat) { S.update('compras', [], l => { const c = l.find(x => x.id === t.dataset.compraCat); if (c) c.cat = t.value; }); toast('Categoria trocada.'); }
   else if (t.dataset.compra) { S.update('compras', [], l => { const c = l.find(x => x.id === t.dataset.compra); if (c) c.feito = t.checked; }); if (t.checked) { confeteEm(t, 12); toast('Comprado! ✓'); } }
   else if (t.dataset.act === 'bebe') { S.update('config', {}, c => { c.bebe = t.checked; }); toast(t.checked ? 'Modo Bebê ligado. Só o essencial agora.' : 'Modo Bebê desligado. Rotina completa de volta.'); }
 });
