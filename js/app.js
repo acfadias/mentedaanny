@@ -20,7 +20,9 @@ let devoSel = null;           // data selecionada no devocional
 let filtroFrases = 'todas';
 let semanaOffset = 0;
 let finMes = null;            // mês aberto em Finanças
-let finEditar = false;        // 0 = esta semana
+let finEditar = false;
+let finAba = 'resumo';
+let finCat = '';        // 0 = esta semana
 let fraseExtra = 0;           // muda a frase quando ela toca em "outra"
 let calado = false;           // evita re-render enquanto ela digita
 
@@ -554,13 +556,32 @@ function telaFinancas() {
       <label class="fin-val"><span class="sr">Valor em ${F.nomeMes(finMes)}</span><input class="mini n" data-fin="hist|${c.id}|${finMes}" value="${v ?? ''}" inputmode="decimal" placeholder="${c.valor}"></label></li>`;
   }).join('');
   const maxB = Math.max(1, ...Object.values(r.bancos).map(b => b.total));
-  return `<div class="view">
-    <div class="hero"><div><p class="eyebrow">Controle financeiro</p><h1>Finanças <em>em dia.</em></h1></div>
-      <div class="hero-side"><div class="wk-nav"><button class="round" data-act="fin-mes" data-v="-1" aria-label="Mês anterior" ${finMes <= F.PRIMEIRO ? 'disabled style="opacity:.3"' : ''}>‹</button>
-        <b class="fin-mes">${F.NOME_MES[mm - 1]} <span>${y}</span></b><button class="round" data-act="fin-mes" data-v="1" aria-label="Próximo mês">›</button>
-        ${finMes === (atual < F.INICIO ? F.INICIO : atual) ? '' : '<button class="btn ghost sm" data-act="fin-mes" data-v="0">Voltar</button>'}</div></div></div>
-    ${!f.contas.length ? '<div class="banner">Nenhuma conta ainda. Use o link de importação que te mandei no chat, ou adicione abaixo.</div>' : ''}
-    <div class="grid fin-tiles">
+  const P = F.painel(f, finMes);
+  const abas = { resumo: 'Resumo', fixas: 'Contas fixas', extras: 'Gastos extras', historico: 'Histórico' };
+  const seg = `<div class="fin-abas" role="tablist">${Object.entries(abas).map(([k, v]) => `<button role="tab" aria-selected="${finAba === k}" class="${finAba === k ? 'on' : ''}" data-act="fin-aba" data-v="${k}">${v}</button>`).join('')}</div>`;
+  let corpo = '';
+  if (finAba === 'resumo') {
+    const restaCaju = P.caju - P.extrasCaju;
+    corpo = `<div class="grid fin-tiles">
+      ${tile('Renda do casal', P.renda ? F.brl(P.renda) : '—', P.renda ? `você ${F.brl(P.rec.anny || 0)} · Irad ${F.brl(P.rec.irad || 0)}` : 'preencha abaixo')}
+      ${tile('Gastos do mês', F.brl(P.gastos), `fixos ${F.brl(P.total)} · extras ${F.brl(P.extrasTotal)}`)}
+      ${tile('Sobra', P.sobra != null ? F.brl(P.sobra) : '—', P.sobra != null ? `depois das caixinhas · ${Math.round(P.sobra / P.renda * 100)}% da renda` : 'precisa das rendas', P.sobra == null ? '' : P.sobra < 0 ? 'rose' : 'ok')}
+      ${tile('Caju', P.caju ? F.brl(restaCaju) : '—', P.caju ? `restam de ${F.brl(P.caju)}` : 'saldo do benefício', P.caju && restaCaju < 0 ? 'rose' : '')}
+    </div>
+    <div class="grid" style="margin-top:clamp(14px,2vw,22px)">
+      <section class="card c-12">${graficoDestino(P)}</section>
+      <section class="card c-7"><h2>Evolução <small>renda e gastos por mês</small></h2>${graficoEvolucao(f, finMes)}</section>
+      <section class="card line c-5"><h2>Análise do mês</h2><ul class="analise">${F.analise(f, finMes).map(a => `<li class="an-${a.tom}"><span class="an-dot" aria-hidden="true"></span><span>${esc(a.txt)}</span></li>`).join('')}</ul></section>
+      <section class="card c-6"><h2>Rendas de ${F.nomeMes(finMes)} <small>muda todo mês com a comissão</small></h2>
+        ${[['anny', 'Seu salário (com comissão)'], ['irad', 'Salário do Irad'], ['caju', 'Cartão Caju (benefício)']].map(([k, rot]) => `<label class="rec-row"><span>${rot}</span><input class="mini n" data-fin="rec|${k}|${finMes}" value="${P.rec[k] ?? ''}" inputmode="decimal" placeholder="0"></label>`).join('')}
+        <p class="note" style="margin:10px 0 0">O Caju é separado: paga só o que você lançar como “Caju” nos gastos extras e não entra na sobra.</p></section>
+      <section class="card line c-6"><h2>Caixinhas</h2>
+        <div class="chips" style="margin:0 0 8px">${[['anny', '% do seu salário'], ['casal', '% da renda do casal']].map(([k, v]) => `<button class="chip ${(f.caixaBase || 'anny') === k ? 'on' : ''}" data-act="fin-base" data-v="${k}">${v}</button>`).join('')}</div>
+        ${P.caixinhas.map((c, i) => `<div class="cx-row"><span>${esc(c.nome)}</span><span class="cx-pct"><input class="mini n" data-fin="pct|${i}" value="${c.pct}" inputmode="decimal" aria-label="Percentual ${esc(c.nome)}">%</span><b>${P.base ? F.brl(c.valor) : '—'}</b></div>`).join('')}
+        <div class="cx-row sobra"><span>Total guardado</span><b>${F.brl(P.caixasTotal)}</b></div></section>
+    </div>`;
+  } else if (finAba === 'fixas') {
+    corpo = `<div class="grid fin-tiles">
       ${tile('Total do mês', F.brl(r.total), `${r.contas.length} contas`)}
       ${tile('Já pago', F.brl(r.pago), `<span class="at-bar"><i style="width:${r.total ? r.pago / r.total * 100 : 0}%"></i></span>`, 'ok')}
       ${tile('Falta pagar', F.brl(r.falta), r.falta ? 'até o fim do mês' : 'tudo certo', r.falta ? 'rose' : '')}
@@ -582,22 +603,99 @@ function telaFinancas() {
           ${Object.entries(r.bancos).sort((a, b) => b[1].total - a[1].total).map(([b, v]) => `<div class="banco-row f-${F.corBanco(b)}"><div class="row" style="justify-content:space-between"><span>${bancoPill(b)}</span><b>${F.brl(v.total)}</b></div>
             <span class="banco-bar"><i style="width:${v.total / maxB * 100}%"></i><i class="pg" style="width:${(v.total - v.falta) / maxB * 100}%"></i></span><small class="muted">${v.falta ? `falta ${F.brl(v.falta)}` : 'tudo pago'}</small></div>`).join('') || '<p class="empty">Sem contas.</p>'}
           <div class="row" style="justify-content:space-between;border-top:1px solid var(--fg);padding-top:10px;margin-top:8px"><b>Total mensal</b><b class="serif" style="font-size:22px">${F.brl(r.total)}</b></div></section>
-        <section class="card line"><h2>Caixinhas</h2>
-          <label class="note" style="display:block;margin-bottom:10px">Líquido de ${F.nomeMes(finMes)}
-            <input class="campo" data-fin="liq|${finMes}" value="${r.liquido || ''}" inputmode="decimal" placeholder="Quanto entrou no mês?" style="margin-top:6px"></label>
-          ${r.caixinhas.map((c, i) => `<div class="cx-row"><span>${esc(c.nome)}</span><span class="cx-pct"><input class="mini n" data-fin="pct|${i}" value="${c.pct}" inputmode="decimal" aria-label="Percentual ${esc(c.nome)}">%</span><b>${r.liquido ? F.brl(c.valor) : '—'}</b></div>`).join('')}
-          ${r.sobra != null ? `<div class="cx-row sobra ${r.sobra < 0 ? 'neg' : ''}"><span>Sobra depois das contas e caixinhas</span><b>${F.brl(r.sobra)}</b></div>` : '<p class="note">Coloque o líquido do mês pra ver quanto vai pra cada caixinha.</p>'}
-        </section>
       </div>
+    </div>`;
+  } else if (finAba === 'extras') {
+    const lista = P.extras.filter(e => !finCat || (e.cat || 'Outros') === finCat);
+    const hoje = ymd(new Date());
+    const dataPadrao = hoje.slice(0, 7) === finMes ? hoje : finMes + '-01';
+    corpo = `<div class="grid">
+      <section class="card c-7"><h2>Gastos extras de ${F.nomeMes(finMes)} <small>${F.brl(P.extrasTotal)}</small></h2>
+        <form class="fin-nova extra-form" data-form="extra-novo">
+          <div class="row"><input name="desc" class="mini" placeholder="O que foi? (ex.: farmácia)" required style="flex:2;min-width:170px"><input name="valor" class="mini n" placeholder="valor" inputmode="decimal" required style="width:100px"></div>
+          <div class="row"><select name="cat" class="mini">${F.CATEGORIAS.map(c => `<option>${c}</option>`).join('')}</select>
+            <select name="forma" class="mini">${Object.entries(F.FORMAS).map(([k, v]) => `<option value="${k}">${v}</option>`).join('')}</select>
+            <select name="banco" class="mini" aria-label="Banco ou cartão"><option value="">Banco/cartão</option>${f.bancos.map(b => `<option>${esc(b)}</option>`).join('')}</select>
+            <label class="parc">em <input name="parcelas" class="mini n" value="1" inputmode="numeric" style="width:52px" aria-label="Parcelas">x</label>
+            <input name="data" type="date" class="mini" value="${dataPadrao}">
+            <button class="btn sm">Lançar</button></div></form>
+        ${finCat ? `<div class="banner" style="margin:12px 0 0">Mostrando só ${esc(finCat)} <button class="btn ghost sm" data-act="fin-cat" data-v="">Ver todos</button></div>` : ''}
+        <ul class="list fin-list">${lista.map(e => `<li class="fin-row extra"><span class="fin-dia">${e.data.slice(8, 10)}/${e.data.slice(5, 7)}</span>
+          <span class="t"><b>${esc(e.desc)}</b><span class="pill">${esc(e.cat || 'Outros')}</span><span class="pill ${e.forma === 'caju' ? 'f-faculdade banco' : ''}">${F.FORMAS[e.forma] || e.forma}${e.banco ? ' · ' + esc(e.banco) : ''}</span>${e.parcela ? `<span class="pill rose">${e.parcela}</span>` : ''}</span>
+          <b class="ex-val">${F.brl(e.valorMes)}</b><button class="x" data-act="del-extra" data-id="${e.id}" title="Apagar">×</button></li>`).join('') || '<li class="empty">Nenhum gasto extra lançado neste mês.</li>'}</ul></section>
+      <section class="card line c-5"><h2>Por categoria <small>toque para filtrar</small></h2>${graficoCategorias(P.porCat)}
+        <div class="fin-formas">${Object.entries(F.FORMAS).map(([k, v]) => { const t = P.extras.filter(e => e.forma === k).reduce((s, e) => s + e.valorMes, 0); return t ? `<div class="cx-row"><span>${v}</span><span></span><b>${F.brl(t)}</b></div>` : ''; }).join('')}</div>
+        ${F.parcelasFuturas(f, finMes) ? `<p class="note">Parcelas já comprometidas nos próximos meses: <b>${F.brl(F.parcelasFuturas(f, finMes))}</b></p>` : ''}</section>
+    </div>`;
+  } else {
+    corpo = `<div class="grid">
       <section class="card c-12"><h2>Histórico <small>13 meses · toque num valor para corrigir</small></h2>
         <div class="fin-hist"><table><thead><tr><th>Conta</th><th>Banco</th><th>Dia</th>${meses.map(m => `<th class="${m === finMes ? 'sel' : ''}">${F.nomeMes(m)}</th>`).join('')}</tr></thead><tbody>
           ${[...f.contas].sort((a, b) => (a.dia || 0) - (b.dia || 0)).map(c => `<tr class="f-${F.corBanco(c.banco)}"><th>${esc(c.nome)}</th><td>${bancoPill(c.banco)}</td><td>${c.dia ?? '—'}</td>${meses.map(m => {
             const ativa = (!c.desde || c.desde <= m) && (!c.ate || c.ate >= m); if (!ativa) return '<td class="off"></td>';
             const v = F.valorNoMes(f, c, m), pg = F.pago(f, m, c.id);
             return `<td class="${pg ? 'pg' : m <= atual ? 'aberto' : ''} ${m === finMes ? 'sel' : ''}"><input data-fin="hist|${c.id}|${m}" value="${v ?? ''}" inputmode="decimal" aria-label="${esc(c.nome)} ${F.nomeMes(m)}"></td>`; }).join('')}</tr>`).join('')}
-          </tbody><tfoot><tr><th colspan="3">Total</th>${meses.map(m => `<td class="${m === finMes ? 'sel' : ''}">${F.brl(F.resumo(f, m).total)}</td>`).join('')}</tr></tfoot></table></div>
+          </tbody><tfoot><tr><th colspan="3">Contas fixas</th>${meses.map(m => `<td class="${m === finMes ? 'sel' : ''}">${F.brl(F.resumo(f, m).total)}</td>`).join('')}</tr>
+          <tr><th colspan="3">Gastos extras</th>${meses.map(m => `<td class="${m === finMes ? 'sel' : ''}">${F.brl(F.painel(f, m).extrasTotal)}</td>`).join('')}</tr>
+          <tr><th colspan="3">Renda do casal</th>${meses.map(m => { const v = F.painel(f, m).renda; return `<td class="${m === finMes ? 'sel' : ''}">${v ? F.brl(v) : '—'}</td>`; }).join('')}</tr></tfoot></table></div>
         <p class="note" style="margin:10px 0 0"><span class="lg pg"></span> pago <span class="lg aberto"></span> em aberto</p></section>
-    </div></div>`;
+    </div>`;
+  }
+  return `<div class="view">
+    <div class="hero"><div><p class="eyebrow">Controle financeiro</p><h1>Finanças <em>em dia.</em></h1></div>
+      <div class="hero-side"><div class="wk-nav"><button class="round" data-act="fin-mes" data-v="-1" aria-label="Mês anterior" ${finMes <= F.PRIMEIRO ? 'disabled style="opacity:.3"' : ''}>‹</button>
+        <b class="fin-mes">${F.NOME_MES[mm - 1]} <span>${y}</span></b><button class="round" data-act="fin-mes" data-v="1" aria-label="Próximo mês">›</button>
+        ${finMes === (atual < F.INICIO ? F.INICIO : atual) ? '' : '<button class="btn ghost sm" data-act="fin-mes" data-v="0">Voltar</button>'}</div></div></div>
+    ${!f.contas.length ? '<div class="banner">Nenhuma conta ainda. Use o link de importação que te mandei no chat, ou adicione em Contas fixas.</div>' : ''}
+    ${seg}
+    ${corpo}
+  </div>`;
+}
+
+// ---------- Gráficos de finanças ----------
+const CH = ['fixos', 'extras', 'caixas', 'sobra'];
+function graficoDestino(P) {
+  const partes = [['fixos', 'Contas fixas', P.total, 'fixas'], ['extras', 'Gastos extras', P.extrasDinheiro, 'extras'], ['caixas', 'Caixinhas', P.caixasTotal, 'resumo'], ['sobra', 'Sobra', Math.max(0, P.sobra || 0), 'resumo']];
+  const usado = partes.slice(0, 3).reduce((s, x) => s + x[2], 0);
+  const total = Math.max(P.renda || 0, usado + Math.max(0, P.sobra || 0)) || 1;
+  const pc = v => Math.round(v / (P.renda || total) * 100);
+  return `<h2>Para onde vai a renda <small>${P.renda ? `renda do casal: ${F.brl(P.renda)}` : 'preencha as rendas para ver a sobra'}</small></h2>
+    <div class="destino" role="img" aria-label="Divisão da renda: ${partes.map(p => `${p[1]} ${F.brl(p[2])}`).join(', ')}">
+      ${partes.filter(p => p[2] > 0).map(p => `<button class="seg ch-${p[0]}" style="flex:${p[2] / total}" data-tip="${p[1]}: ${F.brl(p[2])}${P.renda ? ` · ${pc(p[2])}% da renda` : ''}" data-act="fin-aba" data-v="${p[3]}" aria-label="${p[1]} ${F.brl(p[2])}"></button>`).join('')}
+      ${P.renda && usado > P.renda ? `<span class="destino-estouro" style="left:${P.renda / total * 100}%" data-tip="Até aqui é a renda. O que passa disso está no vermelho."></span>` : ''}
+    </div>
+    <ul class="destino-leg">${partes.map(p => `<li><span class="sw ch-${p[0]}"></span><span>${p[1]}</span><b>${F.brl(p[2])}</b>${P.renda ? `<small>${pc(p[2])}%</small>` : ''}</li>`).join('')}</ul>`;
+}
+
+function graficoEvolucao(f, mFim) {
+  const meses = Array.from({ length: 6 }, (_, i) => F.mesMais(mFim, i - 5)).filter(m => m >= F.PRIMEIRO);
+  const dados = meses.map(m => { const p = F.painel(f, m); return { m, fixos: p.total, extras: p.extrasTotal, renda: p.renda }; });
+  const bruto = Math.max(1, ...dados.map(d => Math.max(d.fixos + d.extras, d.renda)));
+  let max = bruto;
+  const W = 560, H = 210, L = 46, B = 24, T = 10, bw = Math.min(46, (W - L) / dados.length * 0.5);
+  const x = i => L + (W - L) / dados.length * (i + 0.5), y = v => T + (H - T - B) * (1 - v / max);
+  const passo = Math.pow(10, Math.floor(Math.log10(max))) * (max / Math.pow(10, Math.floor(Math.log10(max))) > 5 ? 2 : 1);
+  max = Math.ceil(bruto / passo) * passo;
+  const grades = []; for (let v = 0; v <= max; v += passo) grades.push(v);
+  const k = v => v >= 1000 ? (v / 1000).toLocaleString('pt-BR', { maximumFractionDigits: 1 }) + ' mil' : String(v);
+  return `<ul class="destino-leg compacta"><li><span class="sw ch-fixos"></span>Fixos</li><li><span class="sw ch-extras"></span>Extras</li><li><span class="sw linha ch-sobra"></span>Renda</li></ul>
+  <svg class="evo" viewBox="0 0 ${W} ${H}" role="img" aria-label="Renda e gastos dos últimos meses">
+    ${grades.map(v => `<line class="grade" x1="${L}" x2="${W}" y1="${y(v)}" y2="${y(v)}"/><text class="eixo" x="${L - 8}" y="${y(v) + 4}" text-anchor="end">${k(v)}</text>`).join('')}
+    ${dados.map((d, i) => { const yf = y(d.fixos), ye = y(d.fixos + d.extras), base = y(0);
+      return `<g class="evo-col" data-tip="${F.nomeMes(d.m)}&#10;Fixos: ${F.brl(d.fixos)}&#10;Extras: ${F.brl(d.extras)}&#10;Renda: ${d.renda ? F.brl(d.renda) : 'não preenchida'}">
+        <rect class="hit" x="${x(i) - (W - L) / dados.length / 2}" y="${T}" width="${(W - L) / dados.length}" height="${H - T - B}"/>
+        ${d.fixos ? `<path class="ch-fixos" d="M${x(i) - bw / 2},${base} V${yf + (d.extras ? 0 : 4)} ${d.extras ? '' : `q0,-4 4,-4`} H${x(i) + bw / 2 - (d.extras ? 0 : 4)} ${d.extras ? '' : `q4,0 4,4`} V${base} Z"/>` : ''}
+        ${d.extras ? `<path class="ch-extras" d="M${x(i) - bw / 2},${yf - 2} V${ye + 4} q0,-4 4,-4 H${x(i) + bw / 2 - 4} q4,0 4,4 V${yf - 2} Z"/>` : ''}
+        ${d.renda ? `<line class="renda" x1="${x(i) - bw / 2 - 6}" x2="${x(i) + bw / 2 + 6}" y1="${y(d.renda)}" y2="${y(d.renda)}"/>` : ''}
+        <text class="eixo ${d.m === mFim ? 'sel' : ''}" x="${x(i)}" y="${H - 6}" text-anchor="middle">${F.nomeMes(d.m)}</text></g>`; }).join('')}
+  </svg>`;
+}
+
+function graficoCategorias(porCat) {
+  const itens = Object.entries(porCat).sort((a, b) => b[1] - a[1]);
+  if (!itens.length) return '<p class="empty">Os gastos lançados aparecem aqui por categoria.</p>';
+  const max = itens[0][1];
+  return `<ul class="cat-bars">${itens.map(([c, v]) => `<li><button class="${finCat === c ? 'on' : ''}" data-act="fin-cat" data-v="${esc(c)}" data-tip="${esc(c)}: ${F.brl(v)}"><span>${esc(c)}</span><span class="cb"><i style="width:${v / max * 100}%"></i></span><b>${F.brl(v)}</b></button></li>`).join('')}</ul>`;
 }
 
 const TELAS = { hoje: telaHoje, semana: telaSemana, financas: telaFinancas, casa: telaCasa, faculdade: telaFaculdade, trabalho: telaTrabalho, devocional: telaDevocional, frases: telaFrases, ajustes: telaAjustes, geladeira: telaGeladeira };
@@ -686,6 +784,7 @@ function salvarFin(t) {
   const [tipo, a, b] = t.dataset.fin.split('|');
   F.salvar(f => {
     if (tipo === 'hist') { f.historico[b] = { ...(f.historico[b] || {}) }; const n = num(t.value); if (t.value.trim() === '' ) delete f.historico[b][a]; else if (n != null) f.historico[b][a] = n; }
+    if (tipo === 'rec') { f.receitas[b] = { ...(f.receitas[b] || {}) }; const n = num(t.value); if (!t.value.trim() || n == null) delete f.receitas[b][a]; else f.receitas[b][a] = n; }
     if (tipo === 'liq') { const n = num(t.value); if (n == null || !t.value.trim()) delete f.liquido[a]; else f.liquido[a] = n; }
     if (tipo === 'pct') { const n = num(t.value); if (n != null) f.caixinhas[+a] = { ...f.caixinhas[+a], pct: n }; }
     if (tipo === 'conta') { const c = f.contas.find(x => x.id === a); if (!c) return; if (b === 'nome' || b === 'banco') c[b] = t.value.trim() || c[b]; else { const n = num(t.value); c[b] = t.value.trim() === '' ? null : n ?? c[b]; } }
@@ -712,6 +811,11 @@ app.addEventListener('submit', async e => {
     if (!/^(https|webcal):\/\/.*google/i.test(v)) { toast('Esse não parece o endereço secreto iCal do Google.', 4000); return; }
     if (/\/public\//.test(v)) { toast('Esse é o endereço público. Use o “Endereço secreto no formato iCal”.', 6000); return; }
     S.update('agendas', {}, l => { l[f.dataset.k] = v; }); toast('Agenda salva. Carregando…'); setTimeout(recarregarAgenda, 1500); return;
+  }
+  if (tipo === 'extra-novo') {
+    const valor = num(f.valor.value); if (!f.desc.value.trim() || valor == null) return;
+    F.salvar(d => { d.extras = d.extras || []; d.extras.push({ id: uid(), desc: f.desc.value.trim(), valor, cat: f.cat.value, forma: f.forma.value, banco: f.banco.value || null, parcelas: Math.max(1, num(f.parcelas.value) || 1), data: f.data.value || ymd(new Date()) }); });
+    toast('Gasto lançado.'); return;
   }
   if (tipo === 'conta-nova') {
     let banco = f.banco.value;
@@ -834,6 +938,10 @@ document.addEventListener('click', e => {
     }
     case 'copiar-feed': navigator.clipboard?.writeText(FEED_BASE + S.get('feed-token', '')).then(() => toast('Link copiado ✓'), () => toast('Selecione o link e copie.')); break;
     case 'fin-mes': { const atual = F.mesDe(); finMes = b.dataset.v === '0' ? (atual < F.INICIO ? F.INICIO : atual) : F.mesMais(finMes, Number(b.dataset.v)); if (finMes < F.PRIMEIRO) finMes = F.PRIMEIRO; render(true); break; }
+    case 'fin-aba': finAba = b.dataset.v; render(true); break;
+    case 'fin-cat': finCat = b.dataset.v; if (finAba !== 'extras') finAba = 'extras'; render(); break;
+    case 'fin-base': F.salvar(d => { d.caixaBase = b.dataset.v; }); break;
+    case 'del-extra': { const e = (F.dados().extras || []).find(x => x.id === id); if (e && confirm(`Apagar "${e.desc}"${Number(e.parcelas) > 1 ? ' e todas as parcelas' : ''}?`)) F.salvar(d => { d.extras = d.extras.filter(x => x.id !== id); }); break; }
     case 'fin-editar': finEditar = !finEditar; render(); break;
     case 'del-conta': {
       const f = F.dados(); const c = f.contas.find(x => x.id === id); if (!c) break;
@@ -987,6 +1095,19 @@ function fecharMais() { $('.mais')?.classList.remove('aberto'); $('#mais-btn')?.
 $('#mais-btn').addEventListener('click', e => { e.stopPropagation(); const m = $('.mais'); const ab = !m.classList.contains('aberto'); m.classList.toggle('aberto', ab); e.currentTarget.setAttribute('aria-expanded', String(ab)); });
 document.addEventListener('click', e => { if (!e.target.closest('.mais')) fecharMais(); });
 document.addEventListener('keydown', e => { if (e.key === 'Escape') fecharMais(); });
+// Dica flutuante dos gráficos ([data-tip]) — mouse e toque
+const tip = document.createElement('div'); tip.id = 'tip'; tip.setAttribute('role', 'tooltip'); document.body.appendChild(tip);
+function mostrarTip(el, ev) {
+  tip.innerHTML = esc(el.dataset.tip).replace(/\n|&#10;/g, '<br>'); tip.classList.add('on');
+  const r = el.getBoundingClientRect(), px = ev?.clientX ?? r.left + r.width / 2, py = ev?.clientY ?? r.top;
+  const w = tip.offsetWidth, h = tip.offsetHeight;
+  tip.style.left = Math.min(innerWidth - w - 8, Math.max(8, px - w / 2)) + 'px';
+  tip.style.top = Math.max(8, py - h - 14) + 'px';
+}
+document.addEventListener('pointermove', e => { const el = e.target.closest?.('[data-tip]'); if (el && e.pointerType === 'mouse') mostrarTip(el, e); else if (e.pointerType === 'mouse') tip.classList.remove('on'); });
+document.addEventListener('pointerdown', e => { const el = e.target.closest?.('[data-tip]'); if (el && e.pointerType !== 'mouse') mostrarTip(el, e); else if (!el) tip.classList.remove('on'); });
+document.addEventListener('focusin', e => { const el = e.target.closest?.('[data-tip]'); if (el) mostrarTip(el); });
+addEventListener('scroll', () => tip.classList.remove('on'), { passive: true });
 addEventListener('hashchange', navegar);
 navegar();
 S.iniciarNuvem().then(() => recarregarAgenda());
