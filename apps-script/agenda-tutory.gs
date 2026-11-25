@@ -1,8 +1,10 @@
-// Mente da Anny — envia a agenda da Tutory para o app a cada 15 minutos.
+// Mente da Anny — envia uma agenda do Google para o app a cada 15 minutos.
+// Use na conta da Tutory com FONTE = 'trabalho' e, se quiser, na conta pessoal com FONTE = 'pessoal'.
 // Cole em script.google.com (logada na conta da Tutory). Passo a passo em Ajustes → Agendas.
 
 const URL_FUNCAO = 'https://xvlcbqyjzomzfnewuqpi.supabase.co/functions/v1/agenda-push';
 const CODIGO = 'COLE_AQUI_O_CODIGO_DO_APP';
+const FONTE = 'trabalho'; // 'trabalho' na conta da Tutory, 'pessoal' na conta pessoal
 
 function enviarAgenda() {
   const ini = new Date(); ini.setDate(ini.getDate() - 8);
@@ -25,7 +27,7 @@ function enviarAgenda() {
     pageToken = res.nextPageToken;
   } while (pageToken);
 
-  const r = UrlFetchApp.fetch(URL_FUNCAO, { method: 'post', contentType: 'application/json', headers: { 'x-codigo': CODIGO }, payload: JSON.stringify({ fonte: 'trabalho', eventos: eventos }), muteHttpExceptions: true });
+  const r = UrlFetchApp.fetch(URL_FUNCAO, { method: 'post', contentType: 'application/json', headers: { 'x-codigo': CODIGO }, payload: JSON.stringify({ fonte: FONTE, eventos: eventos }), muteHttpExceptions: true });
   Logger.log(r.getResponseCode() + ' ' + r.getContentText());
 }
 
