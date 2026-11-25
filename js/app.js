@@ -8,6 +8,7 @@ import * as A from './agenda.js';
 import * as F from './financas.js';
 import { montarDia, planoTcc, remarcarTcc, segunda, TCC_BLOCOS, janelaParaAdiantar, adiantarTcc, pendenciasSemana } from './dia.js';
 
+const VERSAO = '17';
 const $ = (s, el = document) => el.querySelector(s);
 const app = $('#app');
 const ICO_CORACAO = on => `<svg viewBox="0 0 24 24" width="16" height="16" fill="${on ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10z"/></svg>`;
@@ -323,7 +324,9 @@ function telaAjustes() {
       <section class="card c-6"><h2>Frases</h2><p class="note">Suas afirmações, favoritas e frases próprias.</p><a class="btn ghost" href="#frases">Abrir frases</a></section>
       ${cardAgendas()}
       ${cardFeed()}
-      <section class="card c-12"><h2>Conta e sincronização</h2>${contaHtml}</section>
+      <section class="card c-12"><h2>Conta e sincronização</h2>${contaHtml}
+        <p class="note" style="margin:12px 0 0">Este aparelho: versão ${VERSAO} · ${S.conta() ? 'logado' : '<b>não logado</b>'} · agendas lidas ${A.cache().quando ? new Date(A.cache().quando).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : 'nunca'}${A.enviados('trabalho') ? ` · Tutory recebida ${new Date(A.enviados('trabalho').quando).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}` : ' · Tutory ainda não recebida aqui'}</p>
+        <div class="row" style="margin-top:10px"><button class="btn ghost sm" data-act="forcar-atualizar">Atualizar tudo agora</button></div></section>
     </div></div>`;
 }
 
@@ -990,6 +993,12 @@ document.addEventListener('click', e => {
     }
     case 'del-agenda': S.update('agendas', {}, l => { delete l[b.dataset.k]; }); setTimeout(recarregarAgenda, 1500); break;
     case 'atualizar-agenda': recarregarAgenda(true); break;
+    case 'forcar-atualizar': (async () => {
+      toast('Atualizando…');
+      try { const regs = await navigator.serviceWorker?.getRegistrations?.() || []; await Promise.all(regs.map(r => r.update())); const ks = await caches?.keys?.() || []; await Promise.all(ks.map(k => caches.delete(k))); } catch {}
+      try { localStorage.removeItem('mda:_puxado'); } catch {}
+      location.reload();
+    })(); break;
     case 'pomo': alternarPomo(); break;
     case 'pomo-zerar': pomo = { acum: 0, inicio: null, fase: 'foco' }; pintarPomo(); break;
     case 'notif': if ('Notification' in window) Notification.requestPermission().then(() => render()); else toast('Este navegador não suporta notificações.'); break;
@@ -1061,7 +1070,10 @@ async function recarregarAgenda(manual = false) {
   const digitando = document.activeElement && /INPUT|TEXTAREA/.test(document.activeElement.tagName) && document.activeElement.type !== 'checkbox';
   if (!digitando) render();
 }
-setInterval(recarregarAgenda, 30 * 60000);
+setInterval(recarregarAgenda, 15 * 60000);
+setInterval(() => { if (document.visibilityState === 'visible') S.puxar(); }, 5 * 60000);
+// Ao voltar para o app (iPad/celular), atualiza as agendas se a última leitura tiver mais de 5 min
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && Date.now() - (A.cache().quando || 0) > 5 * 60000) recarregarAgenda(); });
 
 // ---------- Geladeira ----------
 let wake = null, frTimers = [];
