@@ -7,12 +7,12 @@ const sb = createClient(Deno.env.get('SUPABASE_URL')!, chave);
 
 const FONTE = { trabalho: 'Trabalho', pessoal: 'Pessoal', faculdade: 'Faculdade' } as Record<string, string>;
 const TRABALHO_FIXO = [
-  { id: 'prospectar', titulo: '🎯 Prospectar novos clientes', ini: '0900', fim: '1000' },
-  { id: 'rotinaprosp', titulo: '📋 Rotina de prospecção', ini: '1000', fim: '1015' },
-  { id: 'audios', titulo: '🎙 Enviar os áudios', ini: '1015', fim: '1030' },
+  { id: 'prospectar', titulo: 'Prospectar novos clientes', ini: '0900', fim: '1000' },
+  { id: 'rotinaprosp', titulo: 'Rotina de prospecção', ini: '1000', fim: '1015' },
+  { id: 'audios', titulo: 'Enviar os áudios', ini: '1015', fim: '1030' },
 ];
 
-const esc = (s: string) => String(s ?? '').replace(/\\/g, '\\\\').replace(/;/g, '\;').replace(/,/g, '\\,').replace(/\r?\n/g, '\\n');
+const esc = (s: string) => String(s ?? '').replace(/\\/g, '\\\\').replace(/;/g, '\\;').replace(/,/g, '\\,').replace(/\r?\n/g, '\\n');
 const enc = new TextEncoder();
 function dobrar(linha: string) {
   const out: string[] = []; let cur = '';
@@ -54,7 +54,7 @@ Deno.serve(async (req) => {
   }
   for (const row of tccs ?? []) for (const b of (row.valor ?? []) as any[]) {
     const [h, m] = String(b.hora).split(':').map(Number); const f = h * 60 + m + 60;
-    L.push(...evento({ uid: `${row.chave}-${b.id}`, titulo: '📚 TCC — bloco de 1h', ini: dt(b.data, b.hora), fim: dt(b.data, `${String(Math.floor(f / 60)).padStart(2, '0')}:${String(f % 60).padStart(2, '0')}`), desc: 'Agenda: Faculdade · 2 Pomodoros de 25 min', alerta: 5 }));
+    L.push(...evento({ uid: `${row.chave}-${b.id}`, titulo: 'TCC — bloco de 1h', ini: dt(b.data, b.hora), fim: dt(b.data, `${String(Math.floor(f / 60)).padStart(2, '0')}:${String(f % 60).padStart(2, '0')}`), desc: 'Agenda: Faculdade · 2 Pomodoros de 25 min', alerta: 5 }));
   }
   if (!(cfg?.valor as any)?.bebe) for (const r of TRABALHO_FIXO) {
     L.push(...evento({ uid: 'fixo-' + r.id, titulo: r.titulo, ini: `20261123T${r.ini}00`, fim: `20261123T${r.fim}00`, rrule: 'FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR', desc: 'Agenda: Trabalho · rotina fixa', alerta: 0 }));

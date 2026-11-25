@@ -7,7 +7,7 @@ export const ETAPAS = [
   { t: 'Diário', d: 'Responder à pergunta do dia por escrito.', min: 5 },
   { t: 'Oração', d: 'Agradecer, entregar, pedir. Usar a pergunta como guia.', min: 3 },
 ];
-export const CURTA = 'Versão curta (dias difíceis): só o Salmo + uma frase no diário + oração. Conta como feito. 🤍';
+export const CURTA = 'Versão curta (dias difíceis): só o Salmo + uma frase no diário + oração. Conta como feito.';
 
 export const SEMANAS = [
   { tema: 'Aproximar-se de Deus', verso: '“Chegai-vos a Deus, e ele se chegará a vós.” — Tg 4:8' },
@@ -50,13 +50,13 @@ const L = [
   ['2026-12-22', 4, 'Lc 1:5-25', 'Sl 71:5-6', 'Isabel: Deus vê', 'Em que área sinto que Deus “tirou minha vergonha”?'],
   ['2026-12-23', 4, 'Lc 1:26-38', 'Sl 139:13-16', '“Eis aqui a serva do Senhor”', 'O que significa dizer “faça-se em mim” sobre o parto e o pós-parto?'],
   ['2026-12-24', 4, 'Lc 1:39-56', 'Sl 22:9-10', 'Duas grávidas se encontram', 'Quais mulheres quero perto de mim no puerpério?'],
-  ['2026-12-25', 4, 'Lc 2:1-20', 'Is 9:2-7', 'O nascimento de Jesus 🎄', 'Maria deu à luz longe do “ideal”. O que preciso soltar das minhas expectativas?'],
+  ['2026-12-25', 4, 'Lc 2:1-20', 'Is 9:2-7', 'O nascimento de Jesus', 'Maria deu à luz longe do “ideal”. O que preciso soltar das minhas expectativas?'],
   ['2026-12-26', 4, 'Lc 2:21-40', 'Is 66:12-13', 'Deus consola como mãe', 'Como Deus tem sido “mãe” para mim?'],
   ['2026-12-27', 5, 'Lc 2:41-52', 'Sl 131', 'Maria guardava tudo no coração', 'O que de 2026 quero guardar no coração?'],
   ['2026-12-28', 5, 'Is 49:13-16', 'Sl 100', '“Eu não me esquecerei de ti”', 'Mesmo quando eu esqueço, Deus não esquece. Como isso me consola?'],
   ['2026-12-29', 5, 'Dt 6:1-9', 'Sl 78:1-7', 'Ensinar aos filhos', 'Que fé quero transmitir ao meu filho ou filha?'],
   ['2026-12-30', 5, 'Lm 3:19-26', 'Sl 90', 'Misericórdias a cada manhã', 'Que recomeço preciso me permitir?'],
-  ['2026-12-31', 5, 'Is 43:16-21; Ap 21:1-5', 'Sl 126', '“Eis que faço coisa nova” ✨', 'Escreva 3 pedidos e 3 agradecimentos para 2027.'],
+  ['2026-12-31', 5, 'Is 43:16-21; Ap 21:1-5', 'Sl 126', '“Eis que faço coisa nova”', 'Escreva 3 pedidos e 3 agradecimentos para 2027.'],
 ];
 
 export const PLANO = L.map(([data, s, leitura, salmo, foco, pergunta]) => ({ data, semana: SEMANAS[s], leitura, salmo, foco, pergunta }));

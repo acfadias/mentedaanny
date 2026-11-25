@@ -131,7 +131,7 @@ export const FRASES = Object.entries(F).flatMap(([cat, arr]) => arr.map((t, i) =
 // Mensagens para momentos específicos
 export const AO_MARCAR = [
   'Feito! Uma coisa a menos na cabeça.', 'Isso! Um passo de cada vez.', 'Mandou bem, Anny.', 'Check! Seu eu do futuro agradece.',
-  'Pronto. Respira e celebra.', 'Mais uma! Você está indo muito bem.', 'Olha você cuidando de tudo. 🤍', 'Feito é melhor que perfeito — e está feito.',
+  'Pronto. Respira e celebra.', 'Mais uma! Você está indo muito bem.', 'Olha você cuidando de tudo.', 'Feito é melhor que perfeito — e está feito.',
 ];
 export const DIA_COMPLETO = [
   'Você cuidou de você, da sua casa e do seu bebê hoje. Isso é muito.',

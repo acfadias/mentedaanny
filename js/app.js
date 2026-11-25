@@ -5,10 +5,12 @@ import { PLANO, ETAPAS, CURTA, doDia } from './devocional-plano.js';
 import { FRASES, CATEGORIAS, AO_MARCAR, DIA_COMPLETO, DIA_DIFICIL, sortear } from './afirmacoes.js';
 import { confeteEm, festa, toast } from './efeitos.js';
 import * as A from './agenda.js';
+import * as F from './financas.js';
 import { montarDia, planoTcc, remarcarTcc, segunda, TCC_BLOCOS, janelaParaAdiantar, adiantarTcc, pendenciasSemana } from './dia.js';
 
 const $ = (s, el = document) => el.querySelector(s);
 const app = $('#app');
+const ICO_CORACAO = on => `<svg viewBox="0 0 24 24" width="16" height="16" fill="${on ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10z"/></svg>`;
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 const uid = () => Math.random().toString(36).slice(2, 10);
 const hojeStr = () => ymd(new Date());
@@ -16,7 +18,9 @@ const hojeStr = () => ymd(new Date());
 let rota = 'hoje';
 let devoSel = null;           // data selecionada no devocional
 let filtroFrases = 'todas';
-let semanaOffset = 0;        // 0 = esta semana
+let semanaOffset = 0;
+let finMes = null;            // mês aberto em Finanças
+let finEditar = false;        // 0 = esta semana
 let fraseExtra = 0;           // muda a frase quando ela toca em "outra"
 let calado = false;           // evita re-render enquanto ela digita
 
@@ -42,7 +46,7 @@ function cardFrase(salto = fraseExtra, anelHtml = '') {
     <p class="eyebrow" style="color:inherit;opacity:.7">Pra você, agora</p>
     <blockquote class="fade-swap" id="frase-txt">${esc(f.t)}</blockquote>
     <div class="meta"><span>${esc(CATEGORIAS[f.cat] || 'Minhas frases')}</span>
-      <span class="acts"><button class="round ${fav ? 'fav' : ''}" data-act="fav" data-id="${f.id}" aria-label="Favoritar">${fav ? '♥' : '♡'}</button>
+      <span class="acts"><button class="round ${fav ? 'fav' : ''}" data-act="fav" data-id="${f.id}" aria-label="Favoritar">${ICO_CORACAO(fav)}</button>
       <button class="round" data-act="outra-frase" aria-label="Outra frase">↻</button></span></div>
   </div></section>`;
 }
@@ -55,7 +59,7 @@ function anel(p, tam = 118) {
     <div class="txt"><div><b>${p.ok}/${p.total}</b><span>feitos</span></div></div></div>`;
 }
 
-const FONTE_DE_AREA = { fe: 'pessoal', casa: 'pessoal', saude: 'pessoal', estudo: 'faculdade', trabalho: 'trabalho' };
+const FONTE_DE_AREA = { fe: 'pessoal', casa: 'pessoal', saude: 'pessoal', estudo: 'faculdade', trabalho: 'trabalho', financas: 'pessoal' };
 const ORDEM_FONTES = ['pessoal', 'trabalho', 'faculdade'];
 const proxFonte = f => ORDEM_FONTES[(ORDEM_FONTES.indexOf(f || 'pessoal') + 1) % ORDEM_FONTES.length];
 const fonteBtn = (f, act, i) => `<button class="fdot f-${f || 'pessoal'}" data-act="${act}" data-i="${i}" title="${FONTE_NOME[f || 'pessoal']} — toque para trocar" aria-label="Agenda: ${FONTE_NOME[f || 'pessoal']}. Toque para trocar"></button>`;
@@ -102,11 +106,11 @@ function cardAgenda(dia) {
 function cardConvergencia(dia) {
   const amanha = montarDia(addDias(new Date(), 1));
   const linhas = [];
-  if (dia.horasReuniao >= 4) linhas.push(`<li>📅 <b>Dia cheio:</b> ${fmtH(dia.horasReuniao)} de compromissos. Foque no essencial e nas 3 prioridades.</li>`);
+  if (dia.horasReuniao >= 4) linhas.push(`<li> <b>Dia cheio:</b> ${fmtH(dia.horasReuniao)} de compromissos. Foque no essencial e nas 3 prioridades.</li>`);
   for (const m of dia.mudancas) linhas.push(`<li>↪ <b>${esc(m.titulo)}</b> foi de ${m.de} pra <b>${m.para}</b> por causa de “${esc(m.motivo)}”.</li>`);
   const jan = janelaParaAdiantar();
-  if (jan) linhas.push(`<li class="row" style="gap:10px">✨ <span style="flex:1;min-width:200px">Você tem uma <b>janela livre às ${jan.hora}</b> no expediente. Se o trabalho estiver tranquilo, dá pra adiantar o TCC de hoje à noite (${jan.bloco.hora}).</span><button class="btn sm" data-act="adiantar" data-id="${jan.bloco.id}" data-hora="${jan.hora}">Adiantar pra ${jan.hora}</button></li>`);
-  if (amanha.horasReuniao >= 4) linhas.push(`<li>🔭 <b>Amanhã</b> tem ${fmtH(amanha.horasReuniao)} de compromissos. Que tal adiantar algo hoje?</li>`);
+  if (jan) linhas.push(`<li class="row" style="gap:10px"> <span style="flex:1;min-width:200px">Você tem uma <b>janela livre às ${jan.hora}</b> no expediente. Se o trabalho estiver tranquilo, dá pra adiantar o TCC de hoje à noite (${jan.bloco.hora}).</span><button class="btn sm" data-act="adiantar" data-id="${jan.bloco.id}" data-hora="${jan.hora}">Adiantar pra ${jan.hora}</button></li>`);
+  if (amanha.horasReuniao >= 4) linhas.push(`<li> <b>Amanhã</b> tem ${fmtH(amanha.horasReuniao)} de compromissos. Que tal adiantar algo hoje?</li>`);
   if (!linhas.length) return '';
   return `<section class="card line conv"><h2>Convergências <small>eu reorganizei pra você</small></h2><ul class="note" style="margin:0;padding-left:0;list-style:none;display:flex;flex-direction:column;gap:8px">${linhas.join('')}</ul></section>`;
 }
@@ -152,7 +156,7 @@ function cardCaixa() {
     <form class="add" data-form="caixa"><input name="t" placeholder="Lembrei de uma coisa…" autocomplete="off" data-k="caixa-in" enterkeyhint="send"><button class="btn" aria-label="Adicionar">+</button></form>
     <ul class="list">${cx.length ? cx.map((c, i) => `<li class="li f-${c.fonte || 'pessoal'}">${fonteBtn(c.fonte, 'fonte-caixa', i)}<span class="t">${esc(c.t)}</span>
       <button class="btn ghost sm" data-act="promover" data-id="${c.id}" title="Virar prioridade de hoje">↑ hoje</button>
-      <button class="x" data-act="del-caixa" data-id="${c.id}" aria-label="Apagar">×</button></li>`).join('') : '<li class="empty">Nada aqui. Cabeça leve. 🌿</li>'}</ul></section>`;
+      <button class="x" data-act="del-caixa" data-id="${c.id}" aria-label="Apagar">×</button></li>`).join('') : '<li class="empty">Nada aqui. Cabeça leve.</li>'}</ul></section>`;
 }
 
 // ---------- Telas ----------
@@ -164,9 +168,10 @@ function telaHoje() {
   const bebe = S.get('config', {}).bebe;
   return `<div class="view">
     <div class="grid hoje-top">
-      <div class="c-7 saud"><p class="eyebrow">${dataLonga(d)}${bebe ? ' · <span class="bebe-badge">👶 Modo Bebê</span>' : ''}</p><h1>${saudacao(d)}, <em>${esc(NOME)}.</em></h1></div>
+      <div class="c-7 saud"><p class="eyebrow">${dataLonga(d)}${bebe ? ' · <span class="bebe-badge">Modo Bebê</span>' : ''}</p><h1>${saudacao(d)}, <em>${esc(NOME)}.</em></h1></div>
       <div class="c-5">${cardFrase(fraseExtra, anel(p, 112))}</div>
     </div>
+    ${atalhos(dia)}
     <div class="grid">
       <div class="c-7 stack">${cardAgenda(dia)}${cardProximo(itens, p)}${cardConvergencia(dia)}<section class="card"><h2>Seu dia <span class="row">${legenda()}<small>${itens.filter(i => i.feito).length} de ${itens.length} tarefas</small><button class="btn ghost sm" data-act="novo-comp">+ Compromisso</button></span></h2>${linhaDoTempo(dia)}</section></div>
       <div class="c-5 stack">${cardTop3(data)}${cardPendencias()}${cardCaixa()}</div>
@@ -187,12 +192,12 @@ function telaCasa() {
   const bebe = S.get('config', {}).bebe;
   return `<div class="view">
     <div class="hero"><div><p class="eyebrow">Gestão da casa</p><h1>Casa <em>em paz.</em></h1></div></div>
-    ${bebe ? '<div class="banner">👶 Modo Bebê ligado: as tarefas da casa estão pausadas e não acumulam. Quem puder ajudar, ajuda. 🤍</div>' : ''}
+    ${bebe ? '<div class="banner">Modo Bebê ligado: as tarefas da casa estão pausadas e não acumulam. Quem puder ajudar, ajuda.</div>' : ''}
     <div class="grid">
       <section class="card c-12"><h2>Semana <small>seg a sex · fim de semana livre</small></h2><div class="semana f-pessoal">
         ${dias.map(d => { const ds = ymd(d); const ch = S.get('checks:' + ds, {}); const ts = CASA.filter(t => t.dias.includes(d.getDay()));
           return `<div class="dia ${ds === hoje ? 'hoje' : ''}"><h3>${DIAS[d.getDay()]}</h3><div class="d">${d.getDate()} de ${MESES[d.getMonth()]}${ds === hoje ? ' · hoje' : ''}</div><div class="tasks">
-          ${ts.map(t => `<label><input type="checkbox" class="chk" data-check="${ds}|${t.id}" ${ch[t.id] ? 'checked' : ''}><span>${t.icone} ${t.titulo}<br><small class="muted">${t.hora}</small></span></label>`).join('')}</div></div>`; }).join('')}
+          ${ts.map(t => `<label><input type="checkbox" class="chk" data-check="${ds}|${t.id}" ${ch[t.id] ? 'checked' : ''}><span>${t.titulo}<br><small class="muted">${t.hora}</small></span></label>`).join('')}</div></div>`; }).join('')}
       </div></section>
       <section class="card c-7"><h2>Lista de compras <small>${compras.filter(c => !c.feito).length} itens</small></h2>
         <form class="add" data-form="compras"><input name="t" placeholder="Acabou o quê?" autocomplete="off" data-k="compras-in" enterkeyhint="send"><button class="btn">Adicionar</button></form>
@@ -201,12 +206,12 @@ function telaCasa() {
         ${compras.some(c => c.feito) ? '<div class="row" style="margin-top:12px"><button class="btn ghost sm" data-act="limpar-compras">Limpar comprados</button></div>' : ''}
       </section>
       <section class="card line c-5"><h2>Como funciona</h2><div class="note">
-        <p>🍽 <b>Louça</b> dia sim, dia não: seg, qua e sex.</p>
-        <p>🧺 <b>Roupa</b> nos dias sem louça: ter e qui.</p>
-        <p>🧹 <b>Chão</b> qua e sex — casa limpa antes do fim de semana.</p>
-        <p>🐾 <b>Área dos cachorros</b> junto com a roupa: ter e qui.</p>
-        <p>🚿 <b>Garagem</b> toda sexta, na hora do almoço.</p>
-        <p>✓ <b>Cozinha e escritório</b> todo dia útil às 18h30, antes do jantar.</p>
+        <p> <b>Louça</b> dia sim, dia não: seg, qua e sex.</p>
+        <p> <b>Roupa</b> nos dias sem louça: ter e qui.</p>
+        <p> <b>Chão</b> qua e sex — casa limpa antes do fim de semana.</p>
+        <p> <b>Área dos cachorros</b> junto com a roupa: ter e qui.</p>
+        <p> <b>Garagem</b> toda sexta, na hora do almoço.</p>
+        <p><b>Cozinha e escritório</b> todo dia útil às 18h30, antes do jantar.</p>
         <p>Se algo ficar pra trás, aparece no dia seguinte como <b>opcional</b>. Nada fica vermelho. Dá pra “deixar pra lá” sem culpa.</p>
       </div></section>
     </div></div>`;
@@ -223,7 +228,7 @@ function telaDevocional() {
   return `<div class="view">
     <div class="hero devo-head"><div style="max-width:780px"><p class="eyebrow">${esc(dia.semana.tema)} · ${dataLonga(deYmd(dia.data))}</p><h1>${esc(dia.foco)}</h1><p class="verso">${esc(dia.semana.verso)}</p></div>
       <div class="hero-side">${anel({ ok: feitos, total: PLANO.length, pct: feitos / PLANO.length })}</div></div>
-    ${fim ? '<div class="banner">O plano de 2026 terminou. Peça um plano novo pra 2027 e ele aparece aqui. ✨</div>' : ''}
+    ${fim ? '<div class="banner">O plano de 2026 terminou. Peça um plano novo pra 2027 e ele aparece aqui.</div>' : ''}
     <div class="dias" id="dias">${PLANO.map(p => { const s = S.get('devo:' + p.data, null); const d = deYmd(p.data);
       return `<button class="dbtn ${s ? (s === 'curto' ? 'curto' : 'feito') : ''} ${p.data === hoje ? 'hoje' : ''} ${p.data === devoSel ? 'sel' : ''}" data-act="devo-dia" data-d="${p.data}" aria-label="${dataLonga(d)}"><span>${DIAS_CURTO[d.getDay()]}</span><b>${d.getDate()}</b><i></i></button>`; }).join('')}</div>
     <div class="grid" style="margin-top:8px">
@@ -242,7 +247,7 @@ function telaDevocional() {
           <div class="bar"><i id="t-bar" style="width:0"></i></div>
           <ol class="etapas" id="etapas">${ETAPAS.map((e, i) => `<li class="etapa" data-i="${i}"><span class="n">${i + 1}</span><div><div class="tt">${e.t}</div><div class="dd">${e.d}</div></div><span class="min">${e.min} min</span></li>`).join('')}</ol>
         </section>
-        <section class="card">${st ? `<p class="eyebrow">Feito ${st === 'curto' ? '(versão curta)' : ''}</p><p class="serif" style="font-size:24px;margin:0 0 12px">Que bom que você esteve aqui hoje. 🤍</p><button class="btn ghost sm" data-act="devo-desfazer">Desmarcar</button>`
+        <section class="card">${st ? `<p class="eyebrow">Feito ${st === 'curto' ? '(versão curta)' : ''}</p><p class="serif" style="font-size:24px;margin:0 0 12px">Que bom que você esteve aqui hoje.</p><button class="btn ghost sm" data-act="devo-desfazer">Desmarcar</button>`
           : `<p class="eyebrow">Concluir</p><div class="row"><button class="btn" data-act="devo-ok" data-v="completo">Concluí ✓</button><button class="btn ghost" data-act="devo-ok" data-v="curto">Fiz a versão curta</button></div><p class="note" style="margin:12px 0 0">${esc(CURTA)}${bebe ? ' Com o Modo Bebê, a versão curta é o padrão.' : ''}</p>`}</section>
       </div>
     </div></div>`;
@@ -254,7 +259,7 @@ function telaFrases() {
   let lista = [...minhas, ...FRASES];
   if (filtroFrases === 'favs') lista = lista.filter(f => af.favs?.includes(f.id));
   else if (filtroFrases !== 'todas') lista = lista.filter(f => f.cat === filtroFrases);
-  const filtros = { todas: 'Todas', favs: '♥ Favoritas', ...CATEGORIAS, minhas: 'Minhas' };
+  const filtros = { todas: 'Todas', favs: 'Favoritas', ...CATEGORIAS, minhas: 'Minhas' };
   return `<div class="view">
     <div class="hero"><div><p class="eyebrow">Palavras de afirmação</p><h1>Frases <em>pra você.</em></h1></div></div>
     <div class="grid" style="margin-bottom:22px"><div class="c-7">${cardFrase()}</div>
@@ -263,7 +268,7 @@ function telaFrases() {
     <div class="chips" style="margin-bottom:18px">${Object.entries(filtros).map(([k, v]) => `<button class="chip ${filtroFrases === k ? 'on' : ''}" data-act="filtro" data-f="${k}">${v}</button>`).join('')}</div>
     <div class="frases-list">${lista.length ? lista.map((f, i) => `<article class="fcard" style="animation-delay:${Math.min(i, 20) * 25}ms"><p>${esc(f.t)}</p><div class="meta"><span>${esc(CATEGORIAS[f.cat] || 'Minha')}</span><span>
       ${f.cat === 'minhas' ? `<button class="x" data-act="del-frase" data-id="${f.id}" aria-label="Apagar">×</button>` : ''}
-      <button class="heart ${af.favs?.includes(f.id) ? 'on' : ''}" data-act="fav" data-id="${f.id}" aria-label="Favoritar">${af.favs?.includes(f.id) ? '♥' : '♡'}</button></span></div></article>`).join('') : '<p class="empty">Nada aqui ainda.</p>'}</div>
+      <button class="heart ${af.favs?.includes(f.id) ? 'on' : ''}" data-act="fav" data-id="${f.id}" aria-label="Favoritar">${ICO_CORACAO(af.favs?.includes(f.id))}</button></span></div></article>`).join('') : '<p class="empty">Nada aqui ainda.</p>'}</div>
   </div>`;
 }
 
@@ -272,7 +277,7 @@ function telaAjustes() {
   const tema = S.local('tema') || 'auto';
   const u = S.conta();
   let contaHtml;
-  if (!S.temNuvem()) contaHtml = `<div class="banner">☁️ Falta colar a chave do Supabase em <code>js/config.js</code>. Até lá, tudo fica salvo só neste aparelho.</div>`;
+  if (!S.temNuvem()) contaHtml = `<div class="banner">Falta colar a chave do Supabase em <code>js/config.js</code>. Até lá, tudo fica salvo só neste aparelho.</div>`;
   else if (u) contaHtml = `<div class="set"><div><b>Conectada</b><p>${esc(u.email)} · sincronizando entre aparelhos</p></div><button class="btn ghost sm" data-act="sair">Sair</button></div>`;
   else contaHtml = `<form class="form" data-form="login"><input type="email" name="email" placeholder="E-mail" autocomplete="email" required><input type="password" name="senha" placeholder="Senha" autocomplete="current-password" required minlength="6">
     <div class="row"><button class="btn" name="modo" value="entrar">Entrar</button><button class="btn ghost" name="modo" value="criar">Criar minha conta</button></div>
@@ -280,24 +285,24 @@ function telaAjustes() {
   return `<div class="view">
     <div class="hero"><div><p class="eyebrow">Do seu jeito</p><h1>Ajustes</h1></div></div>
     <div class="grid">
-      <section class="card c-6"><h2>Modo Bebê 👶</h2><div class="set"><div><b>${cfg.bebe ? 'Ligado' : 'Desligado'}</b><p>Reduz tudo ao essencial: devocional curto, vitamina, água e descanso. Casa pausada, sem acumular.</p></div>
+      <section class="card c-6"><h2>Modo Bebê</h2><div class="set"><div><b>${cfg.bebe ? 'Ligado' : 'Desligado'}</b><p>Reduz tudo ao essencial: devocional curto, vitamina, água e descanso. Casa pausada, sem acumular.</p></div>
         <input type="checkbox" class="switch" data-act="bebe" ${cfg.bebe ? 'checked' : ''} aria-label="Modo Bebê"></div></section>
       <section class="card c-6"><h2>Tema</h2><div class="chips">${[['auto', 'Automático'], ['light', 'Claro'], ['dark', 'Noturno']].map(([k, v]) => `<button class="chip ${tema === k ? 'on' : ''}" data-act="tema" data-t="${k}">${v}</button>`).join('')}</div>
         <p class="note">O automático segue o aparelho: claro de dia, noturno à noite.</p></section>
-      <section class="card c-6"><h2>Modo Geladeira 🧊</h2><p class="note">Tela cheia para o iPad: relógio grande, próximo passo, checks e lista de compras. Escurece sozinha à noite.</p>
+      <section class="card c-6"><h2>Modo Geladeira</h2><p class="note">Tela cheia para o iPad: relógio grande, próximo passo, checks e lista de compras. Escurece sozinha à noite.</p>
         <a class="btn" href="#geladeira">Abrir Modo Geladeira</a>
         <details class="note" style="margin-top:12px"><summary>Como deixar o iPad fixo na geladeira</summary><ol>
           <li>No Safari, abra o site → Compartilhar → <b>Adicionar à Tela de Início</b>.</li>
           <li>Abra pelo ícone e toque em <b>Abrir Modo Geladeira</b>. Toque uma vez na tela para mantê-la acesa.</li>
           <li>Ajustes do iPad → Tela e Brilho → <b>Bloqueio Automático: Nunca</b>, com o iPad na tomada.</li>
           <li>Opcional: Ajustes → Acessibilidade → <b>Acesso Guiado</b> para travar no app.</li></ol></details></section>
-      <section class="card c-6"><h2>Lembretes no celular 🔔</h2><p class="note">Um arquivo com toda a rotina (devocional, casa, vitamina). Importe uma vez na sua agenda <b>pessoal</b> e o celular avisa sozinho.</p>
+      <section class="card c-6"><h2>Lembretes no celular</h2><p class="note">Um arquivo com toda a rotina (devocional, casa, vitamina). Importe uma vez na sua agenda <b>pessoal</b> e o celular avisa sozinho.</p>
         <a class="btn" href="lembretes.ics" download>Baixar lembretes</a>
         <details class="note" style="margin-top:12px"><summary>Como importar</summary><ol>
           <li><b>iPhone/iPad:</b> toque no arquivo baixado → Adicionar todos → escolha a agenda pessoal.</li>
           <li><b>Google Agenda (computador):</b> Configurações → Importar e exportar → Importar → escolha a agenda pessoal. O Google usa o alerta padrão da agenda; deixe em “no horário do evento”.</li></ol></details>
         <div class="set"><div><b>Avisos com o app aberto</b><p>Notifica no horário de cada tarefa enquanto o site estiver aberto.</p></div><button class="btn ghost sm" data-act="notif">${'Notification' in window && Notification.permission === 'granted' ? 'Ativados ✓' : 'Ativar'}</button></div></section>
-      <section class="card c-6"><h2>Frases ♡</h2><p class="note">Suas afirmações, favoritas e frases próprias.</p><a class="btn ghost" href="#frases">Abrir frases</a></section>
+      <section class="card c-6"><h2>Frases</h2><p class="note">Suas afirmações, favoritas e frases próprias.</p><a class="btn ghost" href="#frases">Abrir frases</a></section>
       ${cardAgendas()}
       ${cardFeed()}
       <section class="card c-12"><h2>Conta e sincronização</h2>${contaHtml}</section>
@@ -389,12 +394,12 @@ function telaTrabalho() {
 function cardAgendas() {
   const l = S.get('agendas', {});
   const c = A.cache();
-  const linha = (k, nome) => `<div class="set"><div><b><span class="dotc f-${k}"></span>${nome}</b><p>${l[k] ? (c.erros?.[k] ? '⚠️ ' + esc(c.erros[k]) : 'Conectada ✓') : 'Cole o endereço secreto iCal desta agenda.'}</p></div>
+  const linha = (k, nome) => `<div class="set"><div><b><span class="dotc f-${k}"></span>${nome}</b><p>${l[k] ? (c.erros?.[k] ? 'Atenção: ' + esc(c.erros[k]) : 'Conectada ✓') : 'Cole o endereço secreto iCal desta agenda.'}</p></div>
     ${l[k] ? `<button class="btn ghost sm" data-act="del-agenda" data-k="${k}">Remover</button>` : `<form class="add" data-form="agenda" data-k="${k}" style="margin:0;flex:1;max-width:340px"><input name="t" type="password" placeholder="https://calendar.google.com/…/basic.ics" autocomplete="off"><button class="btn sm">Salvar</button></form>`}</div>`;
   return `<section class="card c-12"><h2>Agendas <small>${c.quando ? 'atualizado às ' + new Date(c.quando).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : ''}</small></h2>
     ${!S.conta() ? '<div class="banner">Entre na sua conta (abaixo) para conectar as agendas.</div>' : ''}
     ${linha('pessoal', 'Pessoal')}${linha('trabalho', 'Trabalho (Tutory)')}
-    ${c.erros?.geral ? `<p class="note">⚠️ ${esc(c.erros.geral)}</p>` : ''}
+    ${c.erros?.geral ? `<p class="note">Atenção: ${esc(c.erros.geral)}</p>` : ''}
     <div class="row" style="margin-top:12px"><button class="btn ghost sm" data-act="atualizar-agenda">Atualizar agora</button></div>
     <p class="note">Os links ficam guardados só na sua conta. As agendas são lidas a cada 30 min e quando você abre o app.</p></section>`;
 }
@@ -452,7 +457,7 @@ function telaSemana() {
       <header><a href="${ehHoje ? '#hoje' : '#semana'}" class="wk-h"><span>${DIAS_CURTO[d.getDay()]}</span><b>${d.getDate()}</b></a>
         <div class="wk-meta">${dia.horasReuniao ? `<span class="pill ${dia.horasReuniao >= 5 ? 'rose' : ''}">${fmtH(dia.horasReuniao)}</span>` : ''}<span class="wk-prog" title="${ok} de ${tarefas.length} feitas"><i style="width:${tarefas.length ? ok / tarefas.length * 100 : 0}%"></i></span></div></header>
       ${dia.diaTodo.length ? `<div class="wk-allday">${dia.diaTodo.map(e => `<span class="pill f-${e.fonte}"><span class="dot"></span>${esc(e.titulo)}</span>`).join('')}</div>` : ''}
-      <ol class="wk-list">${linhas || '<li class="empty">Livre 🌿</li>'}</ol>
+      <ol class="wk-list">${linhas || '<li class="empty">Livre</li>'}</ol>
       <button class="wk-add" data-act="novo-comp" data-data="${ds}" aria-label="Adicionar compromisso em ${DIAS[d.getDay()]}">+</button>
     </section>`;
   }).join('');
@@ -465,7 +470,107 @@ function telaSemana() {
   </div>`;
 }
 
-const TELAS = { hoje: telaHoje, semana: telaSemana, casa: telaCasa, faculdade: telaFaculdade, trabalho: telaTrabalho, devocional: telaDevocional, frases: telaFrases, ajustes: telaAjustes, geladeira: telaGeladeira };
+const ico = n => `<svg class="ic"><use href="#i-${n}"/></svg>`;
+function atalhos(dia) {
+  const agora = Date.now(), hoje = hojeStr();
+  const trabEv = dia.comHora.filter(e => e.fonte === 'trabalho');
+  const prox = trabEv.find(e => e.fim > agora);
+  const tarefasT = S.get('trabalho:tarefas', []).filter(t => !t.feito).length;
+  const plano = planoTcc(); const tccOk = plano.filter(b => S.get('checks:' + b.data, {})[b.id]).length;
+  const tccHoje = plano.find(b => b.data === hoje && !S.get('checks:' + hoje, {})[b.id]);
+  const casa = dia.itens.filter(i => i.area === 'casa' && !i.opcional); const casaOk = casa.filter(i => i.feito).length;
+  const compras = S.get('compras', []).filter(c => !c.feito).length;
+  const venc = F.vencendo(); const px = F.proxima();
+  const devo = S.get('devo:' + hoje, null); const plDia = doDia(hoje);
+  const favs = (S.get('afirmacoes', {}).favs || []).length;
+  const t = (href, icone, nome, valor, sub, pct = null, alerta = false) => `<a class="atalho ${alerta ? 'alerta' : ''}" href="${href}">
+    <span class="at-ic">${ico(icone)}</span><span class="at-nome">${nome}</span><b class="at-val">${valor}</b><span class="at-sub">${sub}</span>
+    ${pct != null ? `<span class="at-bar"><i style="width:${Math.round(pct * 100)}%"></i></span>` : ''}</a>`;
+  return `<nav class="atalhos" aria-label="Acesso rápido">
+    ${t('#trabalho', 'trabalho', 'Trabalho', prox ? esc(prox.titulo) : trabEv.length ? 'Reuniões feitas' : 'Sem reuniões', prox ? `${prox.hora} · ${tarefasT} tarefas` : `${tarefasT} tarefas abertas`)}
+    ${t('#financas', 'financas', 'Finanças', venc.length ? `${venc.length} pra pagar` : px ? esc(px.nome) : 'Tudo pago', venc.length ? F.brl(venc.reduce((a, v) => a + (v.valor || 0), 0)) : px ? `dia ${px.dia} · ${F.brl(F.valorNoMes(F.dados(), px, F.mesDe()))}` : 'neste mês', null, venc.length > 0)}
+    ${t('#casa', 'casa', 'Casa', casa.length ? `${casaOk} de ${casa.length}` : 'Dia livre', `${compras} na lista de compras`, casa.length ? casaOk / casa.length : null)}
+    ${t('#faculdade', 'faculdade', 'TCC', `${tccOk} de ${TCC_BLOCOS}h`, tccHoje ? `hoje às ${tccHoje.hora}` : 'nenhum bloco hoje', tccOk / TCC_BLOCOS)}
+    ${t('#devocional', 'devocional', 'Devocional', devo ? 'Feito' : 'Pendente', plDia ? esc(plDia.foco) : 'plano do dia')}
+    ${t('#frases', 'frases', 'Frases', `${favs} favoritas`, 'suas afirmações')}
+  </nav>`;
+}
+
+const num = v => { const n = Number(String(v).trim().replace(/\s|R\$/g, '').replace(/\.(?=\d{3}(\D|$))/g, '').replace(',', '.')); return isNaN(n) ? null : n; };
+function telaFinancas() {
+  const atual = F.mesDe();
+  if (!finMes) finMes = atual;
+  const f = F.dados(), r = F.resumo(f, finMes);
+  const [y, mm] = finMes.split('-').map(Number);
+  const diaHoje = new Date().getDate();
+  const ehAtual = finMes === atual;
+  const px = ehAtual ? F.proxima() : null;
+  const contas = [...r.contas].sort((a, b) => (a.dia || 99) - (b.dia || 99));
+  const meses = Array.from({ length: 13 }, (_, i) => F.mesMais(finMes, i - 12));
+  const tile = (rot, val, sub = '', cls = '') => `<div class="card fin-tile ${cls}"><p class="eyebrow">${rot}</p><b>${val}</b><span>${sub}</span></div>`;
+  const bancoPill = b => `<span class="pill banco f-${F.corBanco(b)}">${esc(b)}</span>`;
+  const linhas = contas.map(c => {
+    const v = F.valorNoMes(f, c, finMes), pg = F.pago(f, finMes, c.id);
+    const atras = ehAtual && !pg && c.dia && Number(c.dia) < diaHoje;
+    if (finEditar) return `<li class="fin-row editar"><input class="mini" data-fin="conta|${c.id}|nome" value="${esc(c.nome)}" aria-label="Nome">
+      <select class="mini" data-fin="conta|${c.id}|banco" aria-label="Banco">${f.bancos.map(b => `<option ${b === c.banco ? 'selected' : ''}>${esc(b)}</option>`).join('')}</select>
+      <input class="mini n" data-fin="conta|${c.id}|dia" value="${c.dia ?? ''}" inputmode="numeric" placeholder="dia" aria-label="Dia do vencimento">
+      <input class="mini n" data-fin="conta|${c.id}|valor" value="${c.valor ?? ''}" inputmode="decimal" aria-label="Valor previsto">
+      <button class="x" data-act="del-conta" data-id="${c.id}" title="Excluir conta">×</button></li>`;
+    return `<li class="fin-row f-${F.corBanco(c.banco)} ${pg ? 'feito' : ''} ${atras ? 'atrasada' : ''}">
+      <input type="checkbox" class="chk" data-pago="${c.id}" ${pg ? 'checked' : ''} aria-label="Pago: ${esc(c.nome)}">
+      <span class="fin-dia">${c.dia ? `dia ${c.dia}` : '—'}</span>
+      <span class="t"><b>${esc(c.nome)}</b>${bancoPill(c.banco)}${atras ? '<span class="pill rose">atrasada</span>' : ''}</span>
+      <label class="fin-val"><span class="sr">Valor em ${F.nomeMes(finMes)}</span><input class="mini n" data-fin="hist|${c.id}|${finMes}" value="${v ?? ''}" inputmode="decimal" placeholder="${c.valor}"></label></li>`;
+  }).join('');
+  const maxB = Math.max(1, ...Object.values(r.bancos).map(b => b.total));
+  return `<div class="view">
+    <div class="hero"><div><p class="eyebrow">Controle financeiro</p><h1>Finanças <em>em dia.</em></h1></div>
+      <div class="hero-side"><div class="wk-nav"><button class="round" data-act="fin-mes" data-v="-1" aria-label="Mês anterior">‹</button>
+        <b class="fin-mes">${F.NOME_MES[mm - 1]} <span>${y}</span></b><button class="round" data-act="fin-mes" data-v="1" aria-label="Próximo mês">›</button>
+        ${ehAtual ? '' : '<button class="btn ghost sm" data-act="fin-mes" data-v="0">Mês atual</button>'}</div></div></div>
+    ${!f.contas.length ? '<div class="banner">Nenhuma conta ainda. Use o link de importação que te mandei no chat, ou adicione abaixo.</div>' : ''}
+    <div class="grid fin-tiles">
+      ${tile('Total do mês', F.brl(r.total), `${r.contas.length} contas`)}
+      ${tile('Já pago', F.brl(r.pago), `<span class="at-bar"><i style="width:${r.total ? r.pago / r.total * 100 : 0}%"></i></span>`, 'ok')}
+      ${tile('Falta pagar', F.brl(r.falta), r.falta ? 'até o fim do mês' : 'tudo certo', r.falta ? 'rose' : '')}
+      ${tile('Próximo vencimento', px ? esc(px.nome) : '—', px ? `dia ${px.dia} · ${F.brl(F.valorNoMes(f, px, finMes))}` : (ehAtual ? 'nada pendente' : ''))}
+    </div>
+    <div class="grid" style="margin-top:clamp(14px,2vw,22px)">
+      <section class="card c-7"><h2>Contas de ${F.nomeMes(finMes)} <button class="btn ghost sm" data-act="fin-editar">${finEditar ? 'Concluir edição' : 'Editar contas'}</button></h2>
+        ${finEditar ? '<p class="note" style="margin-top:0">Nome · banco · dia do vencimento · valor previsto. As mudanças valem para todos os meses.</p>' : '<p class="note" style="margin-top:0">Marque quando pagar. O valor do mês pode ser diferente do previsto: é só digitar.</p>'}
+        <ul class="list fin-list">${linhas || '<li class="empty">Nenhuma conta neste mês.</li>'}</ul>
+        <form class="fin-nova" data-form="conta-nova"><p class="eyebrow" style="margin:18px 0 8px">Nova conta</p>
+          <div class="row"><input name="nome" class="mini" placeholder="Nome (ex.: Plano de saúde)" required style="flex:2;min-width:160px">
+          <select name="banco" class="mini">${f.bancos.map(b => `<option>${esc(b)}</option>`).join('')}<option value="__novo">Outro banco…</option></select>
+          <input name="dia" class="mini n" placeholder="dia" inputmode="numeric" style="width:70px">
+          <input name="valor" class="mini n" placeholder="valor" inputmode="decimal" required style="width:100px">
+          <button class="btn sm">Adicionar</button></div></form>
+      </section>
+      <div class="c-5 stack">
+        <section class="card"><h2>Necessário em banco <small>${F.nomeMes(finMes)}</small></h2>
+          ${Object.entries(r.bancos).sort((a, b) => b[1].total - a[1].total).map(([b, v]) => `<div class="banco-row f-${F.corBanco(b)}"><div class="row" style="justify-content:space-between"><span>${bancoPill(b)}</span><b>${F.brl(v.total)}</b></div>
+            <span class="banco-bar"><i style="width:${v.total / maxB * 100}%"></i><i class="pg" style="width:${(v.total - v.falta) / maxB * 100}%"></i></span><small class="muted">${v.falta ? `falta ${F.brl(v.falta)}` : 'tudo pago'}</small></div>`).join('') || '<p class="empty">Sem contas.</p>'}
+          <div class="row" style="justify-content:space-between;border-top:1px solid var(--fg);padding-top:10px;margin-top:8px"><b>Total mensal</b><b class="serif" style="font-size:22px">${F.brl(r.total)}</b></div></section>
+        <section class="card line"><h2>Caixinhas</h2>
+          <label class="note" style="display:block;margin-bottom:10px">Líquido de ${F.nomeMes(finMes)}
+            <input class="campo" data-fin="liq|${finMes}" value="${r.liquido || ''}" inputmode="decimal" placeholder="Quanto entrou no mês?" style="margin-top:6px"></label>
+          ${r.caixinhas.map((c, i) => `<div class="cx-row"><span>${esc(c.nome)}</span><span class="cx-pct"><input class="mini n" data-fin="pct|${i}" value="${c.pct}" inputmode="decimal" aria-label="Percentual ${esc(c.nome)}">%</span><b>${r.liquido ? F.brl(c.valor) : '—'}</b></div>`).join('')}
+          ${r.sobra != null ? `<div class="cx-row sobra ${r.sobra < 0 ? 'neg' : ''}"><span>Sobra depois das contas e caixinhas</span><b>${F.brl(r.sobra)}</b></div>` : '<p class="note">Coloque o líquido do mês pra ver quanto vai pra cada caixinha.</p>'}
+        </section>
+      </div>
+      <section class="card c-12"><h2>Histórico <small>13 meses · toque num valor para corrigir</small></h2>
+        <div class="fin-hist"><table><thead><tr><th>Conta</th><th>Banco</th><th>Dia</th>${meses.map(m => `<th class="${m === finMes ? 'sel' : ''}">${F.nomeMes(m)}</th>`).join('')}</tr></thead><tbody>
+          ${[...f.contas].sort((a, b) => (a.dia || 0) - (b.dia || 0)).map(c => `<tr class="f-${F.corBanco(c.banco)}"><th>${esc(c.nome)}</th><td>${bancoPill(c.banco)}</td><td>${c.dia ?? '—'}</td>${meses.map(m => {
+            const ativa = (!c.desde || c.desde <= m) && (!c.ate || c.ate >= m); if (!ativa) return '<td class="off"></td>';
+            const v = F.valorNoMes(f, c, m), pg = F.pago(f, m, c.id);
+            return `<td class="${pg ? 'pg' : m <= atual ? 'aberto' : ''} ${m === finMes ? 'sel' : ''}"><input data-fin="hist|${c.id}|${m}" value="${v ?? ''}" inputmode="decimal" aria-label="${esc(c.nome)} ${F.nomeMes(m)}"></td>`; }).join('')}</tr>`).join('')}
+          </tbody><tfoot><tr><th colspan="3">Total</th>${meses.map(m => `<td class="${m === finMes ? 'sel' : ''}">${F.brl(F.resumo(f, m).total)}</td>`).join('')}</tr></tfoot></table></div>
+        <p class="note" style="margin:10px 0 0"><span class="lg pg"></span> pago <span class="lg aberto"></span> em aberto</p></section>
+    </div></div>`;
+}
+
+const TELAS = { hoje: telaHoje, semana: telaSemana, financas: telaFinancas, casa: telaCasa, faculdade: telaFaculdade, trabalho: telaTrabalho, devocional: telaDevocional, frases: telaFrases, ajustes: telaAjustes, geladeira: telaGeladeira };
 
 // ---------- Render ----------
 function render(anima = false) {
@@ -486,14 +591,31 @@ function render(anima = false) {
     pintarTimer();
   }
   if (rota === 'faculdade') pintarPomo();
+  if (rota === 'financas' && anima) { const h = $('.fin-hist'); if (h) h.scrollLeft = h.scrollWidth; }
   if (rota === 'geladeira') relogio();
 }
 
+async function importarDoLink(cod) {
+  try {
+    const bin = Uint8Array.from(atob(cod.replace(/-/g, '+').replace(/_/g, '/')), c => c.charCodeAt(0));
+    const txt = await new Response(new Blob([bin]).stream().pipeThrough(new DecompressionStream('deflate-raw'))).text();
+    const obj = JSON.parse(txt);
+    if (confirm(`Importar ${obj.contas?.length || 0} contas e o histórico da sua planilha?`)) { F.importar(obj); toast('Planilha importada.', 4000); }
+  } catch (e) { console.warn(e); toast('Não consegui ler o link de importação.', 4000); }
+  location.hash = '#financas';
+}
+
 function navegar() {
-  const h = (location.hash || '#hoje').slice(1);
+  const bruto = (location.hash || '#hoje').slice(1);
+  if (bruto.startsWith('importar=')) { importarDoLink(bruto.slice(9)); return; }
+  const h = bruto;
   rota = TELAS[h] ? h : 'hoje';
   document.body.classList.toggle('fridge', rota === 'geladeira');
-  document.querySelectorAll('.tabs a').forEach(a => a.classList.toggle('on', a.dataset.tab === rota));
+  document.querySelectorAll('[data-tab]').forEach(a => a.classList.toggle('on', a.dataset.tab === rota));
+  const noMais = document.querySelector(`.mais-menu [data-tab="${rota}"]`);
+  $('#mais-btn').classList.toggle('on', !!noMais);
+  $('#mais-rot').textContent = noMais ? noMais.querySelector('span').textContent : 'Mais';
+  fecharMais();
   render(true);
   scrollTo({ top: 0 });
   if (rota === 'geladeira') iniciarGeladeira(); else pararGeladeira();
@@ -502,7 +624,8 @@ function navegar() {
 // ---------- Ações ----------
 function toggleCheck(data, id, marcado, el) {
   const antes = progresso(montarDia().itens, S.get('top3:' + hojeStr(), []));
-  S.update('checks:' + data, {}, ch => { if (marcado) ch[id] = Date.now(); else delete ch[id]; });
+  if (id.startsWith('conta:')) F.marcarPago(id.slice(6), marcado, data.slice(0, 7));
+  else S.update('checks:' + data, {}, ch => { if (marcado) ch[id] = Date.now(); else delete ch[id]; });
   if (id === 'devocional') S.update('devo:' + data, null, v => marcado ? (v || (S.get('config', {}).bebe ? 'curto' : 'completo')) : null);
   if (marcado) celebrar(el, antes);
 }
@@ -522,10 +645,22 @@ app.addEventListener('change', e => {
     S.update('top3:' + hojeStr(), () => [{ t: '' }, { t: '' }, { t: '' }], top => { top[+t.dataset.topchk].feito = t.checked; });
     if (t.checked) celebrar(t, antes);
   }
+  else if (t.dataset.pago) { F.marcarPago(t.dataset.pago, t.checked, finMes || F.mesDe()); if (t.checked) { confeteEm(t, 14); toast('Conta paga. Uma preocupação a menos.'); } }
+  else if (t.dataset.fin) salvarFin(t);
   else if (t.dataset.trab) { S.update('trabalho:tarefas', [], l => { const c = l.find(x => x.id === t.dataset.trab); if (c) c.feito = t.checked; }); if (t.checked) { confeteEm(t, 14); toast(sortear(AO_MARCAR)); } }
   else if (t.dataset.compra) { S.update('compras', [], l => { const c = l.find(x => x.id === t.dataset.compra); if (c) c.feito = t.checked; }); if (t.checked) { confeteEm(t, 12); toast('Comprado! ✓'); } }
-  else if (t.dataset.act === 'bebe') { S.update('config', {}, c => { c.bebe = t.checked; }); toast(t.checked ? 'Modo Bebê ligado. Só o essencial agora. 🤍' : 'Modo Bebê desligado. Rotina completa de volta.'); }
+  else if (t.dataset.act === 'bebe') { S.update('config', {}, c => { c.bebe = t.checked; }); toast(t.checked ? 'Modo Bebê ligado. Só o essencial agora.' : 'Modo Bebê desligado. Rotina completa de volta.'); }
 });
+
+function salvarFin(t) {
+  const [tipo, a, b] = t.dataset.fin.split('|');
+  F.salvar(f => {
+    if (tipo === 'hist') { f.historico[b] = { ...(f.historico[b] || {}) }; const n = num(t.value); if (t.value.trim() === '' ) delete f.historico[b][a]; else if (n != null) f.historico[b][a] = n; }
+    if (tipo === 'liq') { const n = num(t.value); if (n == null || !t.value.trim()) delete f.liquido[a]; else f.liquido[a] = n; }
+    if (tipo === 'pct') { const n = num(t.value); if (n != null) f.caixinhas[+a] = { ...f.caixinhas[+a], pct: n }; }
+    if (tipo === 'conta') { const c = f.contas.find(x => x.id === a); if (!c) return; if (b === 'nome' || b === 'banco') c[b] = t.value.trim() || c[b]; else { const n = num(t.value); c[b] = t.value.trim() === '' ? null : n ?? c[b]; } }
+  });
+}
 
 app.addEventListener('input', e => {
   const t = e.target;
@@ -541,19 +676,26 @@ app.addEventListener('submit', async e => {
   e.preventDefault();
   const f = e.target, tipo = f.dataset.form;
   const v = f.t?.value?.trim();
-  if (tipo === 'caixa' && v) { S.update('caixa', [], l => { l.unshift({ id: uid(), t: v }); }); toast('Anotado. Pode esquecer, eu lembro. 🧠'); }
+  if (tipo === 'caixa' && v) { S.update('caixa', [], l => { l.unshift({ id: uid(), t: v }); }); toast('Anotado. Pode esquecer, eu lembro.'); }
   if (tipo === 'trabalho' && v) { S.update('trabalho:tarefas', [], l => { l.unshift({ id: uid(), t: v }); }); }
   if (tipo === 'agenda' && v) {
     if (!/^(https|webcal):\/\/.*google/i.test(v)) { toast('Esse não parece o endereço secreto iCal do Google.', 4000); return; }
     S.update('agendas', {}, l => { l[f.dataset.k] = v; }); toast('Agenda salva. Carregando…'); setTimeout(recarregarAgenda, 1500); return;
   }
+  if (tipo === 'conta-nova') {
+    let banco = f.banco.value;
+    if (banco === '__novo') { banco = (prompt('Nome do banco:') || '').trim(); if (!banco) return; }
+    const valor = num(f.valor.value); if (!f.nome.value.trim() || valor == null) return;
+    F.salvar(d => { if (!d.bancos.includes(banco)) d.bancos.push(banco); d.contas.push({ id: uid(), nome: f.nome.value.trim(), banco, dia: num(f.dia.value) || null, valor, desde: finMes }); });
+    toast('Conta adicionada.'); return;
+  }
   if (tipo === 'compras' && v) { S.update('compras', [], l => { l.unshift({ id: uid(), t: v }); }); }
-  if (tipo === 'frase' && v) { S.update('afirmacoes', { favs: [], minhas: [] }, a => { a.minhas = a.minhas || []; a.minhas.unshift({ id: 'm-' + uid(), t: v }); }); toast('Frase salva. 🤍'); }
+  if (tipo === 'frase' && v) { S.update('afirmacoes', { favs: [], minhas: [] }, a => { a.minhas = a.minhas || []; a.minhas.unshift({ id: 'm-' + uid(), t: v }); }); toast('Frase salva.'); }
   if (tipo === 'login') {
     const modo = e.submitter?.value || 'entrar';
     try {
-      if (modo === 'criar') { const r = await S.criarConta(f.email.value, f.senha.value); toast(r.session ? 'Conta criada! 🎉' : 'Conta criada. Confirme pelo link no seu e-mail.', 5000); }
-      else { await S.entrar(f.email.value, f.senha.value); toast('Bem-vinda de volta! ☁️'); }
+      if (modo === 'criar') { const r = await S.criarConta(f.email.value, f.senha.value); toast(r.session ? 'Conta criada!' : 'Conta criada. Confirme pelo link no seu e-mail.', 5000); }
+      else { await S.entrar(f.email.value, f.senha.value); toast('Bem-vinda de volta!'); }
       render();
     } catch (err) { toast('Não deu: ' + (err.message || err), 5000); }
     return;
@@ -567,7 +709,7 @@ document.addEventListener('submit', e => {
   const c = { id: uid(), titulo: f.titulo.value.trim(), fonte: f.fonte.value, data: f.data.value, ini: f.ini.value, fim: f.fim.value && f.fim.value > f.ini.value ? f.fim.value : f.ini.value, link: f.link.value.trim() || null, semanal: f.semanal.checked };
   if (!c.titulo || !c.data || !c.ini) return;
   S.update('compromissos', [], l => { l.push(c); });
-  toast('Compromisso salvo. Eu reorganizo o resto em volta. ✨');
+  toast('Compromisso salvo. Eu reorganizo o resto em volta.');
 });
 
 document.addEventListener('click', e => {
@@ -582,10 +724,10 @@ document.addEventListener('click', e => {
       const item = S.get('caixa', []).find(x => x.id === id); if (!item) break;
       let ok = false;
       S.update('top3:' + hojeStr(), () => [{ t: '' }, { t: '' }, { t: '' }], top => { const i = top.findIndex(p => !p.t?.trim()); if (i >= 0) { top[i] = { t: item.t, fonte: item.fonte || 'pessoal' }; ok = true; } });
-      if (ok) { S.update('caixa', [], l => l.filter(x => x.id !== id)); toast('Virou prioridade de hoje.'); } else toast('As 3 prioridades já estão cheias. Conclua uma antes. 🙂');
+      if (ok) { S.update('caixa', [], l => l.filter(x => x.id !== id)); toast('Virou prioridade de hoje.'); } else toast('As 3 prioridades já estão cheias. Conclua uma antes.');
       break;
     }
-    case 'pular': S.update('checks:' + b.dataset.d, {}, ch => { ch['pulou:' + id] = Date.now(); }); toast('Deixado pra lá. Sem culpa. 🤍'); break;
+    case 'pular': S.update('checks:' + b.dataset.d, {}, ch => { ch['pulou:' + id] = Date.now(); }); toast('Deixado pra lá. Sem culpa.'); break;
     case 'sugestao': S.update('compras', [], l => { l.unshift({ id: uid(), t: b.dataset.t }); }); break;
     case 'del-compra': S.update('compras', [], l => l.filter(x => x.id !== id)); break;
     case 'limpar-compras': S.update('compras', [], l => l.filter(x => !x.feito)); toast('Lista limpinha.'); break;
@@ -594,7 +736,7 @@ document.addEventListener('click', e => {
       S.set('devo:' + devoSel, b.dataset.v);
       const antes = progresso(montarDia().itens, S.get('top3:' + hojeStr(), []));
       S.update('checks:' + devoSel, {}, ch => { ch.devocional = Date.now(); });
-      if (devoSel === hojeStr()) celebrar(b, antes); else { confeteEm(b, 22); toast('Marcado. 🤍'); }
+      if (devoSel === hojeStr()) celebrar(b, antes); else { confeteEm(b, 22); toast('Marcado.'); }
       break;
     }
     case 'devo-desfazer': S.set('devo:' + devoSel, null); S.update('checks:' + devoSel, {}, ch => { delete ch.devocional; }); break;
@@ -606,11 +748,11 @@ document.addEventListener('click', e => {
     case 'sair': S.sair().then(() => render()); break;
     case 'fonte-top': S.update('top3:' + hojeStr(), () => [{ t: '' }, { t: '' }, { t: '' }], top => { const p = top[+b.dataset.i]; p.fonte = proxFonte(p.fonte); }); break;
     case 'fonte-caixa': S.update('caixa', [], l => { const c = l[+b.dataset.i]; if (c) c.fonte = proxFonte(c.fonte); }); break;
-    case 'adiantar': adiantarTcc(id, b.dataset.hora); confeteEm(b, 16); toast(`TCC adiantado pra ${b.dataset.hora}. Sua noite ficou livre! 🌙`, 4000); break;
+    case 'adiantar': adiantarTcc(id, b.dataset.hora); confeteEm(b, 16); toast(`TCC adiantado pra ${b.dataset.hora}. Sua noite ficou livre!`, 4000); break;
     case 'pend': {
       const { v, tipo, d: data, i } = b.dataset;
       const marcar = fn => tipo === 'top' ? S.update('top3:' + data, [], t => { if (t[+i]) fn(t[+i]); }) : null;
-      if (v === 'feito') { if (tipo === 'top') marcar(p => { p.feito = true; }); else S.update('checks:' + data, {}, ch => { ch[id] = Date.now(); }); confeteEm(b, 16); toast('Feito, mesmo que atrasado, conta! 🤍'); }
+      if (v === 'feito') { if (tipo === 'top') marcar(p => { p.feito = true; }); else S.update('checks:' + data, {}, ch => { ch[id] = Date.now(); }); confeteEm(b, 16); toast('Feito, mesmo que atrasado, conta!'); }
       if (v === 'pular') { if (tipo === 'top') marcar(p => { p.pulou = true; }); else S.update('checks:' + data, {}, ch => { ch['pulou:' + id] = Date.now(); }); toast('Deixado pra lá. Sem culpa.'); }
       if (v === 'hoje') {
         let foi = 'prioridade';
@@ -627,9 +769,18 @@ document.addEventListener('click', e => {
       const tok = Array.from(crypto.getRandomValues(new Uint8Array(20)), x => x.toString(16).padStart(2, '0')).join('');
       if (velho) S.set('feed:' + velho, null);
       S.set('feed:' + tok, { criado: Date.now() }); S.set('feed-token', tok);
-      toast('Link criado! Agora é só assinar. 📅'); break;
+      toast('Link criado! Agora é só assinar.'); break;
     }
     case 'copiar-feed': navigator.clipboard?.writeText(FEED_BASE + S.get('feed-token', '')).then(() => toast('Link copiado ✓'), () => toast('Selecione o link e copie.')); break;
+    case 'fin-mes': finMes = b.dataset.v === '0' ? F.mesDe() : F.mesMais(finMes, Number(b.dataset.v)); render(true); break;
+    case 'fin-editar': finEditar = !finEditar; render(); break;
+    case 'del-conta': {
+      const f = F.dados(); const c = f.contas.find(x => x.id === id); if (!c) break;
+      const temHist = Object.values(f.historico).some(h => h[id] != null);
+      if (temHist) { if (!confirm(`Parar de contar "${c.nome}" a partir de ${F.nomeMes(finMes)}? O histórico fica guardado.`)) break; F.salvar(d => { const x = d.contas.find(y => y.id === id); x.ate = F.mesMais(finMes, -1); }); }
+      else { if (!confirm(`Excluir "${c.nome}"?`)) break; F.salvar(d => { d.contas = d.contas.filter(y => y.id !== id); }); }
+      toast('Conta removida.'); break;
+    }
     case 'novo-comp': dialogoCompromisso(b.dataset.fonte, b.dataset.data); break;
     case 'semana': semanaOffset = b.dataset.v === '0' ? 0 : semanaOffset + Number(b.dataset.v); render(true); break;
     case 'del-comp': if (confirm('Apagar este compromisso?')) S.update('compromissos', [], l => l.filter(c => c.id !== id)); break;
@@ -639,7 +790,7 @@ document.addEventListener('click', e => {
     case 'trab-hoje': {
       const item = S.get('trabalho:tarefas', []).find(x => x.id === id); if (!item) break; let ok = false;
       S.update('top3:' + hojeStr(), () => [{ t: '' }, { t: '' }, { t: '' }], top => { const i = top.findIndex(p => !p.t?.trim()); if (i >= 0) { top[i] = { t: item.t, fonte: 'trabalho' }; ok = true; } });
-      toast(ok ? 'Virou prioridade de hoje.' : 'As 3 prioridades já estão cheias. 🙂'); break;
+      toast(ok ? 'Virou prioridade de hoje.' : 'As 3 prioridades já estão cheias.'); break;
     }
     case 'del-agenda': S.update('agendas', {}, l => { delete l[b.dataset.k]; }); setTimeout(recarregarAgenda, 1500); break;
     case 'atualizar-agenda': recarregarAgenda(true); break;
@@ -680,7 +831,7 @@ function pintarTimer() {
   document.querySelectorAll('.etapa').forEach((el, i) => { el.classList.toggle('atual', (timer.inicio || s > 0) && i === atual); el.classList.toggle('passou', i < atual && s > 0); });
   const btn = $('[data-act="timer"]'); if (btn) btn.textContent = timer.inicio ? 'Pausar' : (s > 0 && s < TOTAL ? 'Continuar' : 'Começar');
   if (timer.inicio && atual !== etapaAnterior && atual < ETAPAS.length && s > 1) toast(`Agora: ${ETAPAS[atual].t}`);
-  if (timer.inicio && s >= TOTAL) { timer.acum = TOTAL; timer.inicio = null; toast('Tempo concluído. Que bom que você esteve aqui. 🤍', 4000); }
+  if (timer.inicio && s >= TOTAL) { timer.acum = TOTAL; timer.inicio = null; toast('Tempo concluído. Que bom que você esteve aqui.', 4000); }
   etapaAnterior = timer.inicio ? atual : -1;
 }
 setInterval(() => { if (timer.inicio) pintarTimer(); }, 1000);
@@ -694,7 +845,7 @@ function pintarPomo() {
   const s = pomoDec(), tot = POMO[pomo.fase];
   if (pomo.inicio && s >= tot) {
     const era = pomo.fase; pomo = { acum: 0, inicio: Date.now(), fase: era === 'foco' ? 'pausa' : 'foco' };
-    toast(era === 'foco' ? 'Pomodoro feito! 5 min de pausa: água, alongar. 🍅' : 'Pausa acabou. Mais 25 min de foco?', 5000);
+    toast(era === 'foco' ? 'Pomodoro feito! 5 min de pausa: água, alongar.' : 'Pausa acabou. Mais 25 min de foco?', 5000);
     if (era === 'foco') festa();
     return pintarPomo();
   }
@@ -709,7 +860,7 @@ setInterval(() => { if (pomo.inicio) pintarPomo(); }, 1000);
 
 // ---------- Agendas ----------
 async function recarregarAgenda(manual = false) {
-  try { await A.atualizar(); if (manual) toast('Agendas atualizadas. 📅'); }
+  try { await A.atualizar(); if (manual) toast('Agendas atualizadas.'); }
   catch (e) { console.warn(e); const c = A.cache(); c.erros = { ...(c.erros || {}), geral: 'Não consegui ler as agendas. Confira se a função “agenda” foi criada no Supabase.' }; S.local('agenda-cache', JSON.stringify(c)); if (manual) toast('Não consegui atualizar as agendas.', 4000); }
   const digitando = document.activeElement && /INPUT|TEXTAREA/.test(document.activeElement.tagName) && document.activeElement.type !== 'checkbox';
   if (!digitando) render();
@@ -747,7 +898,7 @@ setInterval(() => {
     const chave = it.data + it.id + it.hora;
     if (!it.feito && minutos(it.hora) === am && !avisados.has(chave)) {
       avisados.add(chave);
-      toast(`⏰ Agora: ${it.titulo}`, 6000);
+      toast(`Agora: ${it.titulo}`, 6000);
       if ('Notification' in window && Notification.permission === 'granted' && document.visibilityState !== 'visible') try { new Notification('Mente da Anny', { body: it.titulo, icon: 'icons/icon-192.png' }); } catch {}
     }
   }
@@ -769,6 +920,10 @@ S.onStatus((st) => {
 });
 
 if (!S.get('inicio', null)) S.set('inicio', hojeStr());
+function fecharMais() { $('.mais')?.classList.remove('aberto'); $('#mais-btn')?.setAttribute('aria-expanded', 'false'); }
+$('#mais-btn').addEventListener('click', e => { e.stopPropagation(); const m = $('.mais'); const ab = !m.classList.contains('aberto'); m.classList.toggle('aberto', ab); e.currentTarget.setAttribute('aria-expanded', String(ab)); });
+document.addEventListener('click', e => { if (!e.target.closest('.mais')) fecharMais(); });
+document.addEventListener('keydown', e => { if (e.key === 'Escape') fecharMais(); });
 addEventListener('hashchange', navegar);
 navegar();
 S.iniciarNuvem().then(() => recarregarAgenda());

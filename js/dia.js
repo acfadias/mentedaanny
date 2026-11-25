@@ -1,6 +1,7 @@
 // Junta rotina + agendas + TCC e encaixa as tarefas quando algo se choca.
 import * as S from './store.js';
 import * as A from './agenda.js';
+import * as F from './financas.js';
 import { itensDoDia, ymd, deYmd, addDias, minutos, agoraMin, pad, feito } from './rotina.js';
 
 const hm = m => `${pad(Math.floor(m / 60))}:${pad(m % 60)}`;
@@ -55,7 +56,7 @@ export function janelaParaAdiantar() {
 }
 export function adiantarTcc(id, hora) {
   const k = 'tcc:' + ymd(segunda(new Date()));
-  S.set(k, S.get(k, []).map(b => b.id === id ? { ...b, data: ymd(new Date()), hora, adiantado: true, remarcado: 'adiantado por você ✨' } : b));
+  S.set(k, S.get(k, []).map(b => b.id === id ? { ...b, data: ymd(new Date()), hora, adiantado: true, remarcado: 'adiantado por você' } : b));
 }
 
 let salvarPendente = null;
@@ -112,7 +113,16 @@ export function montarDia(d = new Date(), agora = new Date()) {
   const itens = itensDoDia(d, agora);
   if (!bebe && util(d)) {
     for (const b of planoTcc(d).filter(b => b.data === data)) {
-      itens.push({ id: b.id, data, area: 'estudo', titulo: '📚 TCC — bloco de 1h', hora: b.hora, dur: 60, sub: b.remarcado ? (b.adiantado ? b.remarcado : `Remarcado: ${b.remarcado}`) : '2 Pomodoros de 25 min', link: '#faculdade', feito: feito(data, b.id) });
+      itens.push({ id: b.id, data, area: 'estudo', titulo: 'TCC — bloco de 1h', hora: b.hora, dur: 60, sub: b.remarcado ? (b.adiantado ? b.remarcado : `Remarcado: ${b.remarcado}`) : '2 Pomodoros de 25 min', link: '#faculdade', feito: feito(data, b.id) });
+    }
+  }
+  if (data === ymd(agora)) {
+    const f = F.dados(), m = F.mesDe(d), dia = d.getDate();
+    for (const c of F.ativasNoMes(f, m).filter(c => c.dia && Number(c.dia) <= dia)) {
+      const pg = F.pago(f, m, c.id);
+      if (pg && Number(c.dia) !== dia) continue;
+      const atrasada = Number(c.dia) < dia;
+      itens.push({ id: 'conta:' + c.id, data, area: 'financas', fonte: 'pessoal', titulo: `Pagar ${c.nome}`, hora: '12:30', dur: 10, fixo: true, sub: `${F.brl(F.valorNoMes(f, c, m))} · ${c.banco}${atrasada ? ` · venceu dia ${c.dia}` : ''}`, tag: atrasada && !pg ? 'atrasada' : null, link: '#financas', feito: pg });
     }
   }
   const eventos = A.doDia(d);
