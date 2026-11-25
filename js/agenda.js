@@ -57,18 +57,20 @@ export async function atualizar() {
     const links = S.get('agendas', {});
     if (!links.pessoal && !links.trabalho) return cache();
     const res = await S.funcao('agenda');
-    if (!res) return cache();
-    const ICAL = (await import('https://cdn.jsdelivr.net/npm/ical.js@2.2.1/+esm')).default;
+    let ICAL;
+    try { ICAL = (await import('https://cdn.jsdelivr.net/npm/ical.js@2.2.1/+esm')).default; }
+    catch { throw new Error('Não consegui carregar o leitor de agendas. Confira a internet e tente de novo.'); }
     const hoje = new Date(); hoje.setHours(0, 0, 0, 0);
     const ini = addDias(hoje, -8), fim = addDias(hoje, 22);
-    const eventos = [], erros = {};
+    const eventos = [], erros = {}, contagem = {};
     for (const f of Object.keys(FONTES)) {
       const r = res[f]; if (!r) continue;
       if (r.erro) { erros[f] = r.erro; continue; }
-      try { eventos.push(...lerIcs(ICAL, r.ics, f, ini, fim)); } catch (e) { erros[f] = 'Não consegui ler esta agenda.'; console.warn(e); }
+      if (!/BEGIN:VCALENDAR/.test(r.ics || '')) { erros[f] = 'O link não devolveu uma agenda. Use o “Endereço secreto no formato iCal”.'; continue; }
+      try { const evs = lerIcs(ICAL, r.ics, f, ini, fim); eventos.push(...evs); contagem[f] = evs.length; } catch (e) { erros[f] = 'Não consegui ler esta agenda: ' + (e.message || e); console.warn(e); }
     }
     eventos.sort((a, b) => a.ini - b.ini);
-    const c = { eventos, erros, quando: Date.now() };
+    const c = { eventos, erros, contagem, quando: Date.now() };
     S.local(CACHE, JSON.stringify(c));
     return c;
   })().finally(() => { carregando = null; });

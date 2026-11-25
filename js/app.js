@@ -172,6 +172,7 @@ function telaHoje() {
       <div class="c-5">${cardFrase(fraseExtra, anel(p, 112))}</div>
     </div>
     ${atalhos(dia)}
+    ${(() => { const c = A.cache(), l = S.get('agendas', {}); const erro = c.erros?.geral || Object.values(c.erros || {})[0]; return (l.pessoal || l.trabalho) && erro ? `<a class="banner" href="#ajustes" style="text-decoration:none;margin-top:0">Suas agendas não estão aparecendo: ${esc(erro)} <b>Ver em Ajustes →</b></a>` : ''; })()}
     <div class="grid">
       <div class="c-7 stack">${cardAgenda(dia)}${cardProximo(itens, p)}${cardConvergencia(dia)}<section class="card"><h2>Seu dia <span class="row">${legenda()}<small>${itens.filter(i => i.feito).length} de ${itens.length} tarefas</small><button class="btn ghost sm" data-act="novo-comp">+ Compromisso</button></span></h2>${linhaDoTempo(dia)}</section></div>
       <div class="c-5 stack">${cardTop3(data)}${cardPendencias()}${cardCaixa()}</div>
@@ -394,12 +395,12 @@ function telaTrabalho() {
 function cardAgendas() {
   const l = S.get('agendas', {});
   const c = A.cache();
-  const linha = (k, nome) => `<div class="set"><div><b><span class="dotc f-${k}"></span>${nome}</b><p>${l[k] ? (c.erros?.[k] ? 'Atenção: ' + esc(c.erros[k]) : 'Conectada ✓') : 'Cole o endereço secreto iCal desta agenda.'}</p></div>
+  const linha = (k, nome) => `<div class="set"><div><b><span class="dotc f-${k}"></span>${nome}</b><p>${l[k] ? (/\/public\//.test(l[k]) ? 'Atenção: este é o endereço <b>público</b>. Remova e cole o <b>endereço secreto</b> no formato iCal.' : c.erros?.[k] ? 'Atenção: ' + esc(c.erros[k]) : c.contagem?.[k] != null ? `Conectada ✓ · ${c.contagem[k]} eventos entre a semana passada e as próximas 3 semanas` : c.erros?.geral ? 'Ainda não consegui ler (veja o aviso abaixo).' : 'Salva. Toque em “Atualizar agora”.') : 'Cole o endereço secreto iCal desta agenda.'}</p></div>
     ${l[k] ? `<button class="btn ghost sm" data-act="del-agenda" data-k="${k}">Remover</button>` : `<form class="add" data-form="agenda" data-k="${k}" style="margin:0;flex:1;max-width:340px"><input name="t" type="password" placeholder="https://calendar.google.com/…/basic.ics" autocomplete="off"><button class="btn sm">Salvar</button></form>`}</div>`;
   return `<section class="card c-12"><h2>Agendas <small>${c.quando ? 'atualizado às ' + new Date(c.quando).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : ''}</small></h2>
     ${!S.conta() ? '<div class="banner">Entre na sua conta (abaixo) para conectar as agendas.</div>' : ''}
     ${linha('pessoal', 'Pessoal')}${linha('trabalho', 'Trabalho (Tutory)')}
-    ${c.erros?.geral ? `<p class="note">Atenção: ${esc(c.erros.geral)}</p>` : ''}
+    ${c.erros?.geral ? `<div class="banner" style="margin-top:12px">${esc(c.erros.geral)}</div>` : ''}
     <div class="row" style="margin-top:12px"><button class="btn ghost sm" data-act="atualizar-agenda">Atualizar agora</button></div>
     <p class="note">Os links ficam guardados só na sua conta. As agendas são lidas a cada 30 min e quando você abre o app.</p></section>`;
 }
@@ -680,6 +681,7 @@ app.addEventListener('submit', async e => {
   if (tipo === 'trabalho' && v) { S.update('trabalho:tarefas', [], l => { l.unshift({ id: uid(), t: v }); }); }
   if (tipo === 'agenda' && v) {
     if (!/^(https|webcal):\/\/.*google/i.test(v)) { toast('Esse não parece o endereço secreto iCal do Google.', 4000); return; }
+    if (/\/public\//.test(v)) { toast('Esse é o endereço público. Use o “Endereço secreto no formato iCal”.', 6000); return; }
     S.update('agendas', {}, l => { l[f.dataset.k] = v; }); toast('Agenda salva. Carregando…'); setTimeout(recarregarAgenda, 1500); return;
   }
   if (tipo === 'conta-nova') {
@@ -861,7 +863,7 @@ setInterval(() => { if (pomo.inicio) pintarPomo(); }, 1000);
 // ---------- Agendas ----------
 async function recarregarAgenda(manual = false) {
   try { await A.atualizar(); if (manual) toast('Agendas atualizadas.'); }
-  catch (e) { console.warn(e); const c = A.cache(); c.erros = { ...(c.erros || {}), geral: 'Não consegui ler as agendas. Confira se a função “agenda” foi criada no Supabase.' }; S.local('agenda-cache', JSON.stringify(c)); if (manual) toast('Não consegui atualizar as agendas.', 4000); }
+  catch (e) { console.warn(e); const c = A.cache(); c.erros = { ...(c.erros || {}), geral: e.message || 'Não consegui ler as agendas.' }; c.tentativa = Date.now(); S.local('agenda-cache', JSON.stringify(c)); if (manual) toast('Não consegui atualizar as agendas.', 4000); }
   const digitando = document.activeElement && /INPUT|TEXTAREA/.test(document.activeElement.tagName) && document.activeElement.type !== 'checkbox';
   if (!digitando) render();
 }

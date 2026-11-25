@@ -137,10 +137,21 @@ export async function criarConta(email, senha) {
   return data;
 }
 export async function funcao(nome) {
-  if (!sb || !usuario) return null;
+  if (!sb) throw new Error('Sem conexão com o Supabase agora.');
+  if (!usuario) throw new Error('Entre na sua conta (Ajustes) para ler as agendas.');
   await enviar();
   const { data, error } = await sb.functions.invoke(nome, { method: 'POST', body: {} });
-  if (error) throw error;
+  if (error) {
+    const status = error.context?.status;
+    let detalhe = '';
+    try { detalhe = (await error.context?.json?.())?.erro || ''; } catch {}
+    const msg = error.name === 'FunctionsFetchError' || error.name === 'FunctionsRelayError'
+      ? `Não consegui falar com a função “${nome}”. Confira se ela foi criada com esse nome exato e se “Verify JWT” está desligado.`
+      : status === 404 ? `A função “${nome}” não foi encontrada no Supabase. Confira o nome (tudo minúsculo).`
+      : status === 401 ? (detalhe || `O Supabase recusou o acesso (401). Desligue “Verify JWT” na função “${nome}” ou saia e entre de novo na conta.`)
+      : `A função “${nome}” respondeu com erro${status ? ' ' + status : ''}${detalhe ? ': ' + detalhe : ''}.`;
+    throw new Error(msg);
+  }
   return data;
 }
 export async function sair() { await sb?.auth.signOut(); }
