@@ -8,7 +8,7 @@ import * as A from './agenda.js';
 import * as F from './financas.js';
 import { montarDia, planoTcc, remarcarTcc, segunda, TCC_BLOCOS, janelaParaAdiantar, adiantarTcc, pendenciasSemana } from './dia.js';
 
-const VERSAO = '20'; // a mesma versão vai em version.json; o app se atualiza sozinho quando ela muda
+const VERSAO = '21'; // a mesma versão vai em version.json; o app se atualiza sozinho quando ela muda
 const $ = (s, el = document) => el.querySelector(s);
 const app = $('#app');
 const ICO_CORACAO = on => `<svg viewBox="0 0 24 24" width="16" height="16" fill="${on ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10z"/></svg>`;
@@ -438,6 +438,9 @@ function cardAgendas() {
     ${c.erros?.geral ? `<div class="banner" style="margin-top:12px">${esc(c.erros.geral)}</div>` : ''}
     ${(() => { const oc = A.ocultos(); const itens = [...Object.entries(oc.serie).map(([k, v]) => ({ k, tipo: 'serie', t: v.titulo, sub: 'todos' })), ...Object.entries(oc.inst).map(([k, v]) => ({ k, tipo: 'inst', t: v.titulo, sub: v.ini ? new Date(v.ini).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }) : '' }))];
       return itens.length ? `<details class="note" style="margin-top:10px"><summary>Eventos ocultos (${itens.length})</summary><ul class="list">${itens.map(i => `<li class="li"><span class="t">${esc(i.t)} <small class="muted">· ${esc(i.sub)}</small></span><button class="btn ghost sm" data-act="mostrar-ev" data-tipo="${i.tipo}" data-id="${esc(i.k)}">Mostrar de novo</button></li>`).join('')}</ul></details>` : ''; })()}
+    ${S.conta() ? `<div class="set"><div><b>Código dos scripts (Apps Script)</b><p>${pushTok ? 'Use este mesmo código no script da Tutory e no da agenda pessoal.' : 'Ainda não há código. Crie um para conectar agendas pelo Apps Script.'}</p>
+      ${pushTok ? `<input class="campo" readonly value="${esc(pushTok)}" onclick="this.select()" style="margin-top:6px;max-width:420px">` : ''}</div>
+      ${pushTok ? '<button class="btn ghost sm" data-act="copiar-push">Copiar</button>' : '<button class="btn sm" data-act="gerar-push">Criar código</button>'}</div>` : ''}
     <div class="row" style="margin-top:12px"><button class="btn ghost sm" data-act="atualizar-agenda">Atualizar agora</button></div>
     <p class="note">Os links ficam guardados só na sua conta. As agendas são lidas a cada 30 min e quando você abre o app.</p></section>`;
 }
@@ -948,6 +951,7 @@ document.addEventListener('click', e => {
       });
       break;
     }
+    case 'copiar-push': navigator.clipboard?.writeText(S.get('push-token', '')).then(() => toast('Código copiado ✓'), () => toast('Selecione o código e copie.')); break;
     case 'gerar-push': {
       const velho = S.get('push-token', null);
       if (velho && !confirm('Gerar um código novo? O script antigo para de funcionar até você trocar o código nele.')) break;
