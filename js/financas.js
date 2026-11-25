@@ -3,6 +3,8 @@ import * as S from './store.js';
 import { pad } from './rotina.js';
 
 export const K = 'financas';
+export const INICIO = '2026-12';   // a aba abre a partir de dezembro
+export const PRIMEIRO = '2025-12'; // primeiro mês com dados (planilha)
 const vazio = () => ({ contas: [], historico: {}, pagos: {}, liquido: {}, bancos: ['Inter', 'Pag', 'Itaú'], caixinhas: [{ id: 'emergencia', nome: 'Emergência', pct: 10 }, { id: 'contas', nome: 'Contas', pct: 10 }, { id: 'livre', nome: 'Gasto livre', pct: 10 }] });
 
 export const dados = () => ({ ...vazio(), ...S.get(K, vazio) });

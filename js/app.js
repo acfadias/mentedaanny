@@ -529,14 +529,14 @@ function atalhos(dia) {
 const num = v => { const n = Number(String(v).trim().replace(/\s|R\$/g, '').replace(/\.(?=\d{3}(\D|$))/g, '').replace(',', '.')); return isNaN(n) ? null : n; };
 function telaFinancas() {
   const atual = F.mesDe();
-  if (!finMes) finMes = atual;
+  if (!finMes) finMes = atual < F.INICIO ? F.INICIO : atual;
   const f = F.dados(), r = F.resumo(f, finMes);
   const [y, mm] = finMes.split('-').map(Number);
   const diaHoje = new Date().getDate();
   const ehAtual = finMes === atual;
-  const px = ehAtual ? F.proxima() : null;
+  const px = ehAtual ? F.proxima() : finMes > atual ? F.ativasNoMes(f, finMes).filter(c => c.dia && !F.pago(f, finMes, c.id)).sort((a, b) => a.dia - b.dia)[0] || null : null;
   const contas = [...r.contas].sort((a, b) => (a.dia || 99) - (b.dia || 99));
-  const meses = Array.from({ length: 13 }, (_, i) => F.mesMais(finMes, i - 12));
+  const meses = Array.from({ length: 13 }, (_, i) => F.mesMais(finMes, i - 12)).filter(m => m >= F.PRIMEIRO);
   const tile = (rot, val, sub = '', cls = '') => `<div class="card fin-tile ${cls}"><p class="eyebrow">${rot}</p><b>${val}</b><span>${sub}</span></div>`;
   const bancoPill = b => `<span class="pill banco f-${F.corBanco(b)}">${esc(b)}</span>`;
   const linhas = contas.map(c => {
@@ -556,15 +556,15 @@ function telaFinancas() {
   const maxB = Math.max(1, ...Object.values(r.bancos).map(b => b.total));
   return `<div class="view">
     <div class="hero"><div><p class="eyebrow">Controle financeiro</p><h1>Finanças <em>em dia.</em></h1></div>
-      <div class="hero-side"><div class="wk-nav"><button class="round" data-act="fin-mes" data-v="-1" aria-label="Mês anterior">‹</button>
+      <div class="hero-side"><div class="wk-nav"><button class="round" data-act="fin-mes" data-v="-1" aria-label="Mês anterior" ${finMes <= F.PRIMEIRO ? 'disabled style="opacity:.3"' : ''}>‹</button>
         <b class="fin-mes">${F.NOME_MES[mm - 1]} <span>${y}</span></b><button class="round" data-act="fin-mes" data-v="1" aria-label="Próximo mês">›</button>
-        ${ehAtual ? '' : '<button class="btn ghost sm" data-act="fin-mes" data-v="0">Mês atual</button>'}</div></div></div>
+        ${finMes === (atual < F.INICIO ? F.INICIO : atual) ? '' : '<button class="btn ghost sm" data-act="fin-mes" data-v="0">Voltar</button>'}</div></div></div>
     ${!f.contas.length ? '<div class="banner">Nenhuma conta ainda. Use o link de importação que te mandei no chat, ou adicione abaixo.</div>' : ''}
     <div class="grid fin-tiles">
       ${tile('Total do mês', F.brl(r.total), `${r.contas.length} contas`)}
       ${tile('Já pago', F.brl(r.pago), `<span class="at-bar"><i style="width:${r.total ? r.pago / r.total * 100 : 0}%"></i></span>`, 'ok')}
       ${tile('Falta pagar', F.brl(r.falta), r.falta ? 'até o fim do mês' : 'tudo certo', r.falta ? 'rose' : '')}
-      ${tile('Próximo vencimento', px ? esc(px.nome) : '—', px ? `dia ${px.dia} · ${F.brl(F.valorNoMes(f, px, finMes))}` : (ehAtual ? 'nada pendente' : ''))}
+      ${tile('Próximo vencimento', px ? esc(px.nome) : '—', px ? `dia ${px.dia} · ${F.brl(F.valorNoMes(f, px, finMes))}` : (finMes >= atual ? 'nada pendente' : ''))}
     </div>
     <div class="grid" style="margin-top:clamp(14px,2vw,22px)">
       <section class="card c-7"><h2>Contas de ${F.nomeMes(finMes)} <button class="btn ghost sm" data-act="fin-editar">${finEditar ? 'Concluir edição' : 'Editar contas'}</button></h2>
@@ -833,7 +833,7 @@ document.addEventListener('click', e => {
       toast('Link criado! Agora é só assinar.'); break;
     }
     case 'copiar-feed': navigator.clipboard?.writeText(FEED_BASE + S.get('feed-token', '')).then(() => toast('Link copiado ✓'), () => toast('Selecione o link e copie.')); break;
-    case 'fin-mes': finMes = b.dataset.v === '0' ? F.mesDe() : F.mesMais(finMes, Number(b.dataset.v)); render(true); break;
+    case 'fin-mes': { const atual = F.mesDe(); finMes = b.dataset.v === '0' ? (atual < F.INICIO ? F.INICIO : atual) : F.mesMais(finMes, Number(b.dataset.v)); if (finMes < F.PRIMEIRO) finMes = F.PRIMEIRO; render(true); break; }
     case 'fin-editar': finEditar = !finEditar; render(); break;
     case 'del-conta': {
       const f = F.dados(); const c = f.contas.find(x => x.id === id); if (!c) break;
