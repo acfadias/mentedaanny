@@ -60,7 +60,7 @@ export async function atualizar() {
     if (!res) return cache();
     const ICAL = (await import('https://cdn.jsdelivr.net/npm/ical.js@2.2.1/+esm')).default;
     const hoje = new Date(); hoje.setHours(0, 0, 0, 0);
-    const ini = addDias(hoje, -1), fim = addDias(hoje, 15);
+    const ini = addDias(hoje, -8), fim = addDias(hoje, 22);
     const eventos = [], erros = {};
     for (const f of Object.keys(FONTES)) {
       const r = res[f]; if (!r) continue;

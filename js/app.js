@@ -16,6 +16,7 @@ const hojeStr = () => ymd(new Date());
 let rota = 'hoje';
 let devoSel = null;           // data selecionada no devocional
 let filtroFrases = 'todas';
+let semanaOffset = 0;        // 0 = esta semana
 let fraseExtra = 0;           // muda a frase quando ela toca em "outra"
 let calado = false;           // evita re-render enquanto ela digita
 
@@ -282,6 +283,7 @@ function telaAjustes() {
           <li><b>iPhone/iPad:</b> toque no arquivo baixado → Adicionar todos → escolha a agenda pessoal.</li>
           <li><b>Google Agenda (computador):</b> Configurações → Importar e exportar → Importar → escolha a agenda pessoal. O Google usa o alerta padrão da agenda; deixe em “no horário do evento”.</li></ol></details>
         <div class="set"><div><b>Avisos com o app aberto</b><p>Notifica no horário de cada tarefa enquanto o site estiver aberto.</p></div><button class="btn ghost sm" data-act="notif">${'Notification' in window && Notification.permission === 'granted' ? 'Ativados ✓' : 'Ativar'}</button></div></section>
+      <section class="card c-6"><h2>Frases ♡</h2><p class="note">Suas afirmações, favoritas e frases próprias.</p><a class="btn ghost" href="#frases">Abrir frases</a></section>
       ${cardAgendas()}
       <section class="card c-12"><h2>Conta e sincronização</h2>${contaHtml}</section>
     </div></div>`;
@@ -382,7 +384,7 @@ function cardAgendas() {
     <p class="note">Os links ficam guardados só na sua conta. As agendas são lidas a cada 30 min e quando você abre o app.</p></section>`;
 }
 
-function dialogoCompromisso(fonte = 'trabalho') {
+function dialogoCompromisso(fonte = 'trabalho', dataPadrao = null) {
   const d = new Date(); const h = String(Math.min(22, d.getHours() + 1)).padStart(2, '0');
   let dlg = document.getElementById('dlg-comp');
   if (!dlg) { dlg = document.createElement('dialog'); dlg.id = 'dlg-comp'; document.body.appendChild(dlg); }
@@ -390,7 +392,7 @@ function dialogoCompromisso(fonte = 'trabalho') {
     <h2 class="serif" style="font-size:28px;margin:0 0 4px">Novo compromisso</h2>
     <input name="titulo" placeholder="O quê? (reunião, aula, consulta…)" required autocomplete="off">
     <div class="chips" style="margin:0">${Object.entries(A.FONTES_APP).map(([k, v]) => `<label class="chip f-${k}"><input type="radio" name="fonte" value="${k}" ${k === fonte ? 'checked' : ''} class="sr"><span class="dotc"></span>${v}</label>`).join('')}</div>
-    <div class="row"><input type="date" name="data" value="${ymd(d)}" required style="flex:1.4"><input type="time" name="ini" value="${h}:00" required style="flex:1"><input type="time" name="fim" value="${h}:30" style="flex:1"></div>
+    <div class="row"><input type="date" name="data" value="${dataPadrao || ymd(d)}" required style="flex:1.4"><input type="time" name="ini" value="${h}:00" required style="flex:1"><input type="time" name="fim" value="${h}:30" style="flex:1"></div>
     <input name="link" type="url" placeholder="Link da reunião/aula (opcional)" autocomplete="off">
     <label class="row note" style="cursor:pointer"><input type="checkbox" name="semanal" class="chk"> Repete toda semana</label>
     <div class="row" style="justify-content:flex-end;margin-top:6px"><button class="btn ghost" value="cancelar" formnovalidate>Cancelar</button><button class="btn" value="salvar">Salvar</button></div>
@@ -399,7 +401,40 @@ function dialogoCompromisso(fonte = 'trabalho') {
   dlg.querySelector('[name="titulo"]').focus();
 }
 
-const TELAS = { hoje: telaHoje, casa: telaCasa, faculdade: telaFaculdade, trabalho: telaTrabalho, devocional: telaDevocional, frases: telaFrases, ajustes: telaAjustes, geladeira: telaGeladeira };
+function telaSemana() {
+  const hoje = new Date(); hoje.setHours(0, 0, 0, 0);
+  const dom = addDias(hoje, -hoje.getDay() + semanaOffset * 7);
+  const dias = [0, 1, 2, 3, 4, 5, 6].map(i => addDias(dom, i));
+  const sab = dias[6];
+  const titulo = semanaOffset === 0 ? 'Esta semana' : semanaOffset === 1 ? 'Próxima semana' : semanaOffset === -1 ? 'Semana passada' : `${dom.getDate()}/${dom.getMonth() + 1} a ${sab.getDate()}/${sab.getMonth() + 1}`;
+  let totH = 0, totOk = 0, totT = 0;
+  const cols = dias.map(d => {
+    const dia = montarDia(d);
+    const ds = ymd(d), ehHoje = ds === ymd(hoje), passou = d < hoje;
+    const tarefas = dia.itens.filter(i => !i.opcional);
+    const ok = tarefas.filter(i => i.feito).length;
+    totH += dia.horasReuniao; totOk += ok; totT += tarefas.length;
+    const linhas = [
+      ...dia.comHora.map(e => ({ h: minutos(e.hora), html: `<li class="wk-ev f-${e.fonte}"><time>${e.hora}</time><div><b>${esc(e.titulo)}</b>${e.link ? `<a class="wk-link" href="${esc(e.link)}" target="_blank" rel="noopener">Entrar ↗</a>` : ''}</div></li>` })),
+      ...dia.itens.map(i => ({ h: minutos(i.hora), html: `<li class="wk-it f-${i.fonte || FONTE_DE_AREA[i.area] || 'pessoal'} ${i.feito ? 'feito' : ''}"><time>${i.hora}</time><label><input type="checkbox" class="chk" data-check="${i.data}|${i.id}" ${i.feito ? 'checked' : ''}><span>${esc(i.titulo)}${i.tag === 'remarcado' ? ' <i class="wk-tag">↪</i>' : ''}</span></label></li>` })),
+    ].sort((a, b) => a.h - b.h).map(x => x.html).join('');
+    return `<section class="wk-dia ${ehHoje ? 'hoje' : ''} ${passou ? 'passou' : ''} ${d.getDay() === 0 || d.getDay() === 6 ? 'fds' : ''}">
+      <header><a href="${ehHoje ? '#hoje' : '#semana'}" class="wk-h"><span>${DIAS_CURTO[d.getDay()]}</span><b>${d.getDate()}</b></a>
+        <div class="wk-meta">${dia.horasReuniao ? `<span class="pill ${dia.horasReuniao >= 5 ? 'rose' : ''}">${fmtH(dia.horasReuniao)}</span>` : ''}<span class="wk-prog" title="${ok} de ${tarefas.length} feitas"><i style="width:${tarefas.length ? ok / tarefas.length * 100 : 0}%"></i></span></div></header>
+      ${dia.diaTodo.length ? `<div class="wk-allday">${dia.diaTodo.map(e => `<span class="pill f-${e.fonte}"><span class="dot"></span>${esc(e.titulo)}</span>`).join('')}</div>` : ''}
+      <ol class="wk-list">${linhas || '<li class="empty">Livre 🌿</li>'}</ol>
+      <button class="wk-add" data-act="novo-comp" data-data="${ds}" aria-label="Adicionar compromisso em ${DIAS[d.getDay()]}">+</button>
+    </section>`;
+  }).join('');
+  return `<div class="view">
+    <div class="hero"><div><p class="eyebrow">${dom.getDate()} de ${MESES[dom.getMonth()]} a ${sab.getDate()} de ${MESES[sab.getMonth()]}</p><h1>${titulo.replace(/semana/i, '<em>semana</em>')}</h1></div>
+      <div class="hero-side"><div class="wk-nav"><button class="round" data-act="semana" data-v="-1" aria-label="Semana anterior">‹</button>${semanaOffset ? '<button class="btn ghost sm" data-act="semana" data-v="0">Hoje</button>' : ''}<button class="round" data-act="semana" data-v="1" aria-label="Próxima semana">›</button></div></div></div>
+    <div class="wk-resumo">${legenda()}<span>${fmtH(totH) || '0 h'} de compromissos</span><span>${totOk} de ${totT} tarefas feitas</span></div>
+    <div class="wk-grid">${cols}</div>
+  </div>`;
+}
+
+const TELAS = { hoje: telaHoje, semana: telaSemana, casa: telaCasa, faculdade: telaFaculdade, trabalho: telaTrabalho, devocional: telaDevocional, frases: telaFrases, ajustes: telaAjustes, geladeira: telaGeladeira };
 
 // ---------- Render ----------
 function render(anima = false) {
@@ -540,7 +575,8 @@ document.addEventListener('click', e => {
     case 'sair': S.sair().then(() => render()); break;
     case 'fonte-top': S.update('top3:' + hojeStr(), () => [{ t: '' }, { t: '' }, { t: '' }], top => { const p = top[+b.dataset.i]; p.fonte = proxFonte(p.fonte); }); break;
     case 'fonte-caixa': S.update('caixa', [], l => { const c = l[+b.dataset.i]; if (c) c.fonte = proxFonte(c.fonte); }); break;
-    case 'novo-comp': dialogoCompromisso(b.dataset.fonte); break;
+    case 'novo-comp': dialogoCompromisso(b.dataset.fonte, b.dataset.data); break;
+    case 'semana': semanaOffset = b.dataset.v === '0' ? 0 : semanaOffset + Number(b.dataset.v); render(true); break;
     case 'del-comp': if (confirm('Apagar este compromisso?')) S.update('compromissos', [], l => l.filter(c => c.id !== id)); break;
     case 'remarcar-tcc': { const r = remarcarTcc(id); toast(r ? `Bloco remarcado pra ${DIAS[deYmd(r.data).getDay()].toLowerCase()}, ${r.hora}.` : 'Não achei outro horário livre esta semana.'); break; }
     case 'del-trab': S.update('trabalho:tarefas', [], l => l.filter(x => x.id !== id)); break;
