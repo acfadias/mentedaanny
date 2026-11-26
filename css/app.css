@@ -677,3 +677,10 @@ dialog .row input{min-width:0;border:1px solid var(--line);background:var(--bg);
 .orc-bar i{display:block;background:var(--pr);animation:cresce .8s var(--ease) both;transform-origin:left}
 .orc-msg{margin:0 0 6px;font-size:14px;line-height:1.5}
 @media (max-width:560px){.li.compra .t{flex-basis:calc(100% - 40px)}.li.compra{padding-left:0}.orc-nums b{font-size:19px}}
+
+.orc-nums.quatro{grid-template-columns:repeat(4,1fr)}
+.orc-nums b.carrinho{color:var(--fg)}
+.orc-bar{position:relative}
+.orc-bar i.carr{background:var(--fg)}
+.orc-limite{position:absolute;top:-3px;bottom:-3px;width:2px;background:var(--fg)}
+@media (max-width:560px){.orc-nums.quatro{grid-template-columns:repeat(2,1fr)}}

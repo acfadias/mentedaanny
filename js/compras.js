@@ -84,8 +84,9 @@ export function plano(lista, orcamento) {
   const semPreco = abertos.filter(c => totalItem(c) == null).length;
   const porPrio = { essencial: 0, importante: 0, esperar: 0 };
   for (const c of abertos) porPrio[prioDe(c)] += totalItem(c) || 0;
+  const comprado = lista.filter(c => c.feito).reduce((s, c) => s + (totalItem(c) || 0), 0);
   const cabe = new Set(), fora = new Set();
-  let resta = orcamento ?? Infinity;
+  let resta = orcamento == null ? Infinity : orcamento - comprado; // o que já está no carrinho já usou parte do saldo
   let faltouMaisImportante = false; // se um essencial não coube, nada de prioridade menor entra na frente dele
   for (const p of ['essencial', 'importante', 'esperar']) {
     let faltouAqui = false;
@@ -95,5 +96,6 @@ export function plano(lista, orcamento) {
     }
     if (faltouAqui) faltouMaisImportante = true;
   }
-  return { total, semPreco, porPrio, cabe, fora, sobra: orcamento == null ? null : orcamento - total, comprado: lista.filter(c => c.feito).reduce((s, c) => s + (totalItem(c) || 0), 0) };
+  const geral = total + comprado;
+  return { total, geral, comprado, semPreco, porPrio, cabe, fora, sobra: orcamento == null ? null : orcamento - geral };
 }

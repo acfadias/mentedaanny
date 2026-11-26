@@ -10,7 +10,7 @@ import * as E from './entregas.js';
 import * as C from './compras.js';
 import { montarDia, planoTcc, remarcarTcc, segunda, TCC_BLOCOS, janelaParaAdiantar, adiantarTcc, pendenciasSemana } from './dia.js';
 
-const VERSAO = '29'; // a mesma versão vai em version.json; o app se atualiza sozinho quando ela muda
+const VERSAO = '30'; // a mesma versão vai em version.json; o app se atualiza sozinho quando ela muda
 const $ = (s, el = document) => el.querySelector(s);
 const app = $('#app');
 const ICO_CORACAO = on => `<svg viewBox="0 0 24 24" width="16" height="16" fill="${on ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10z"/></svg>`;
@@ -223,14 +223,18 @@ function orcamentoCompras(compras) {
   const orc = manual != null && manual !== '' ? Number(manual) : caju;
   const pl = C.plano(compras, orc);
   PLANO_COMPRAS = orc != null ? pl : null;
-  if (!compras.some(c => !c.feito)) return '';
-  const pct = v => orc ? Math.min(100, v / orc * 100) : 0;
+  if (!compras.length) return '';
+  const pct = v => orc ? Math.min(100, v / Math.max(orc, pl.geral) * 100) : 0;
   const fora = compras.filter(c => pl.fora.has(c.id));
   return `<div class="orc ${pl.sobra != null && pl.sobra < 0 ? 'estourou' : ''}">
-    <div class="orc-nums"><div><span>${manual != null && manual !== '' ? 'Orçamento' : 'Saldo do Caju'}</span><b>${orc != null ? F.brl(orc) : '—'}</b></div><div><span>Total da lista</span><b>${F.brl(pl.total)}</b></div><div><span>${pl.sobra == null ? 'Sobra' : pl.sobra >= 0 ? 'Sobra' : 'Passa'}</span><b class="${pl.sobra != null && pl.sobra < 0 ? 'neg' : 'pos'}">${pl.sobra == null ? '—' : F.brl(Math.abs(pl.sobra))}</b></div></div>
-    ${orc ? `<div class="orc-bar">${['essencial', 'importante', 'esperar'].map(p => pl.porPrio[p] ? `<i class="pr-${p}" style="width:${pct(pl.porPrio[p])}%" data-tip="${C.PRIOS[p]}: ${F.brl(pl.porPrio[p])}"></i>` : '').join('')}</div>` : ''}
+    <div class="orc-nums quatro"><div><span>${manual != null && manual !== '' ? 'Orçamento' : 'Saldo do Caju'}</span><b>${orc != null ? F.brl(orc) : '—'}</b></div>
+      <div><span>Total da compra</span><b id="orc-geral">${F.brl(pl.geral)}</b></div>
+      <div><span>No carrinho</span><b class="carrinho">${F.brl(pl.comprado)}</b></div>
+      <div><span>${pl.sobra == null || pl.sobra >= 0 ? 'Sobra' : 'Passa'}</span><b class="${pl.sobra != null && pl.sobra < 0 ? 'neg' : 'pos'}">${pl.sobra == null ? '—' : F.brl(Math.abs(pl.sobra))}</b></div></div>
+    ${orc ? `<div class="orc-bar">${pl.comprado ? `<i class="carr" style="width:${pct(pl.comprado)}%" data-tip="No carrinho: ${F.brl(pl.comprado)}"></i>` : ''}${['essencial', 'importante', 'esperar'].map(p => pl.porPrio[p] ? `<i class="pr-${p}" style="width:${pct(pl.porPrio[p])}%" data-tip="Falta pegar (${C.PRIOS[p].toLowerCase()}): ${F.brl(pl.porPrio[p])}"></i>` : '').join('')}${orc && pl.geral > orc ? `<span class="orc-limite" style="left:${orc / pl.geral * 100}%"></span>` : ''}</div>` : ''}
     <p class="orc-msg">${orc == null ? 'Cadastre o Caju do mês em Finanças → Resumo, ou defina um orçamento abaixo, para eu calcular o que cabe.'
-      : !pl.total ? 'Coloque os valores dos itens para eu somar e comparar com o saldo.'
+      : !pl.geral ? 'Coloque os valores dos itens para eu somar e comparar com o saldo.'
+      : !pl.total ? `Tudo no carrinho: ${F.brl(pl.comprado)}. ${pl.sobra >= 0 ? `Sobram ${F.brl(pl.sobra)} no Caju.` : `Passou ${F.brl(-pl.sobra)} do Caju.`}`
       : pl.sobra >= 0 ? `Cabe tudo. Ainda sobram ${F.brl(pl.sobra)}.`
       : (() => { const soma = l => F.brl(l.reduce((s2, c) => s2 + (C.totalItem(c) || 0), 0)); const ess = fora.filter(c => C.prioDe(c) === 'essencial'), resto = fora.filter(c => C.prioDe(c) !== 'essencial');
           return `Não cabe tudo no saldo. ${ess.length ? `Essenciais que passam: <b>${ess.map(c => esc(c.t)).join(', ')}</b> (${soma(ess)}) — pague com outro cartão ou divida. ` : 'Todos os essenciais cabem. '}${resto.length ? `Deixe para depois: <b>${resto.map(c => esc(c.t)).join(', ')}</b> (${soma(resto)}).` : ''}`; })()}
@@ -266,8 +270,8 @@ function telaCasa() {
         ${compras.length ? C.agrupar(compras).map(([k, itens]) => `<div class="compra-grupo"><h3>${C.NOME[k]} <small>${itens.filter(c => !c.feito).length}</small></h3><ul class="list">${itens.map(c => { const pr = C.prioDe(c), tot = C.totalItem(c), pl = PLANO_COMPRAS;
           return `<li class="li compra f-pessoal ${c.feito ? 'feito' : ''} ${pl && pl.fora.has(c.id) ? 'fora' : ''}"><input type="checkbox" class="chk" data-compra="${c.id}" ${c.feito ? 'checked' : ''} aria-label="${esc(c.t)}"><span class="t">${esc(c.t)}${tot != null ? `<small class="sub-tot">${F.brl(tot)}</small>` : ''}${pl && pl.fora.has(c.id) ? '<small class="fora-tag">não cabe no Caju</small>' : ''}</span>
           <button class="prio pr-${pr}" data-act="prio" data-id="${c.id}" title="Prioridade: toque para trocar">${C.PRIOS[pr]}</button>
-          <label class="preco"><span>R$</span><input class="pi" data-compra-preco="${c.id}" value="${c.preco != null ? String(c.preco).replace('.', ',') : ''}" inputmode="decimal" placeholder="valor" aria-label="Valor de ${esc(c.t)}${c.qtd ? ' (por unidade/kg)' : ''}"></label>
-          <span class="qtd"><button class="qb" data-act="qtd" data-id="${c.id}" data-d="-1" aria-label="Menos">−</button><input class="qi" data-compra-qtd="${c.id}" value="${esc(c.qtd || '')}" placeholder="qtd" aria-label="Quantidade de ${esc(c.t)}"><button class="qb" data-act="qtd" data-id="${c.id}" data-d="1" aria-label="Mais">+</button></span>
+          <label class="preco"><span>R$</span><input class="pi" data-k="preco-${c.id}" data-compra-preco="${c.id}" value="${c.preco != null ? String(c.preco).replace('.', ',') : ''}" inputmode="decimal" placeholder="valor" aria-label="Valor de ${esc(c.t)}${c.qtd ? ' (por unidade/kg)' : ''}"></label>
+          <span class="qtd"><button class="qb" data-act="qtd" data-id="${c.id}" data-d="-1" aria-label="Menos">−</button><input class="qi" data-k="qtd-${c.id}" data-compra-qtd="${c.id}" value="${esc(c.qtd || '')}" placeholder="qtd" aria-label="Quantidade de ${esc(c.t)}"><button class="qb" data-act="qtd" data-id="${c.id}" data-d="1" aria-label="Mais">+</button></span>
           <select class="cat-sel" data-compra-cat="${c.id}" aria-label="Categoria de ${esc(c.t)}" title="Trocar categoria">${C.CATS.map(([ck, cn]) => `<option value="${ck}" ${ck === k ? 'selected' : ''}>${cn}</option>`).join('')}</select>
           <button class="x" data-act="del-compra" data-id="${c.id}" aria-label="Apagar">×</button></li>`; }).join('')}</ul></div>`).join('') : '<p class="empty">Lista vazia. Geladeira feliz.</p>'}
         ${compras.some(c => c.feito) ? `<div class="row" style="margin-top:12px">${compras.some(c => c.feito && C.totalItem(c) != null) ? '<button class="btn sm" data-act="fechar-compra">Fechar compra e lançar no Caju</button>' : ''}<button class="btn ghost sm" data-act="limpar-compras">Limpar comprados</button></div>` : ''}
@@ -857,9 +861,9 @@ app.addEventListener('change', e => {
   else if (t.dataset.pago) { F.marcarPago(t.dataset.pago, t.checked, finMes || F.mesDe()); if (t.checked) { confeteEm(t, 14); toast('Conta paga. Uma preocupação a menos.'); } }
   else if (t.dataset.fin) salvarFin(t);
   else if (t.dataset.trab) { S.update('trabalho:tarefas', [], l => { const c = l.find(x => x.id === t.dataset.trab); if (c) c.feito = t.checked; }); if (t.checked) { confeteEm(t, 14); toast(sortear(AO_MARCAR)); } }
-  else if (t.dataset.compraPreco) { const n = num(t.value); S.update('compras', [], l => { const c = l.find(x => x.id === t.dataset.compraPreco); if (c) c.preco = t.value.trim() === '' ? null : n; }); }
+  else if (t.dataset.compraPreco) { const n = num(t.value); calado = true; S.update('compras', [], l => { const c = l.find(x => x.id === t.dataset.compraPreco); if (c) c.preco = t.value.trim() === '' ? null : n; }); calado = false; }
   else if ('comprasOrc' in t.dataset) { const n = num(t.value); S.set('compras:orcamento', t.value.trim() === '' || n == null ? null : n); }
-  else if (t.dataset.compraQtd) { S.update('compras', [], l => { const c = l.find(x => x.id === t.dataset.compraQtd); if (c) c.qtd = t.value.trim(); }); }
+  else if (t.dataset.compraQtd) { calado = true; S.update('compras', [], l => { const c = l.find(x => x.id === t.dataset.compraQtd); if (c) c.qtd = t.value.trim(); }); calado = false; }
   else if (t.dataset.compraCat) { S.update('compras', [], l => { const c = l.find(x => x.id === t.dataset.compraCat); if (c) c.cat = t.value; }); toast('Categoria trocada.'); }
   else if (t.dataset.compra) { S.update('compras', [], l => { const c = l.find(x => x.id === t.dataset.compra); if (c) c.feito = t.checked; }); if (t.checked) { confeteEm(t, 12); toast('Comprado! ✓'); } }
   else if (t.dataset.act === 'bebe') { S.update('config', {}, c => { c.bebe = t.checked; }); toast(t.checked ? 'Modo Bebê ligado. Só o essencial agora.' : 'Modo Bebê desligado. Rotina completa de volta.'); }
@@ -878,6 +882,21 @@ function salvarFin(t) {
 
 app.addEventListener('input', e => {
   const t = e.target;
+  // valor e quantidade das compras: soma ao vivo enquanto digita
+  if (t.dataset.compraPreco || t.dataset.compraQtd) {
+    const id = t.dataset.compraPreco || t.dataset.compraQtd, campo = t.dataset.compraPreco ? 'preco' : 'qtd';
+    const v = campo === 'preco' ? (t.value.trim() === '' ? null : num(t.value)) : t.value.trim();
+    if (campo === 'preco' && t.value.trim() !== '' && v == null) return;
+    calado = true; // não redesenha a tela inteira: só os números, para não tirar o cursor do campo
+    S.update('compras', [], l => { const c = l.find(x => x.id === id); if (c) c[campo] = v; });
+    calado = false;
+    const compras = S.get('compras', []), item = compras.find(x => x.id === id);
+    const orc = $('.orc'); if (orc) { const novo = document.createElement('div'); novo.innerHTML = orcamentoCompras(compras); if (novo.firstElementChild) orc.replaceWith(novo.firstElementChild); }
+    const li = t.closest('li'), tot = item && C.totalItem(item);
+    if (PLANO_COMPRAS) document.querySelectorAll('li.compra').forEach(el => { const cid = el.querySelector('[data-compra]')?.dataset.compra; const fora = PLANO_COMPRAS.fora.has(cid); el.classList.toggle('fora', fora); const tag = el.querySelector('.fora-tag'); if (fora && !tag) el.querySelector('.t').insertAdjacentHTML('beforeend', '<small class="fora-tag">não cabe no Caju</small>'); if (!fora) tag?.remove(); });
+    if (li) { let sub = li.querySelector('.sub-tot'); if (tot != null) { if (!sub) { sub = document.createElement('small'); sub.className = 'sub-tot'; li.querySelector('.t').appendChild(sub); } sub.textContent = F.brl(tot); } else sub?.remove(); }
+    return;
+  }
   calado = true;
   if (t.dataset.top != null) S.update('top3:' + hojeStr(), () => [{ t: '' }, { t: '' }, { t: '' }], top => { top[+t.dataset.top].t = t.value; if (!t.value) top[+t.dataset.top].feito = false; });
   else if (t.dataset.diario) S.set('diario:' + t.dataset.diario, t.value);
